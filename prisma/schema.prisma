@@ -1,0 +1,45 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String      @id @default(cuid())
+  email        String      @unique
+  passwordHash String
+  name         String?
+  createdAt    DateTime    @default(now())
+  months       MonthClose[]
+}
+
+model MonthClose {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  label     String   // e.g., "2025-09"
+  startDate DateTime
+  endDate   DateTime
+  createdAt DateTime @default(now())
+  tasks     Task[]
+
+  @@index([userId, label], map: "user_label_idx")
+}
+
+model Task {
+  id        String     @id @default(cuid())
+  monthId   String
+  month     MonthClose @relation(fields: [monthId], references: [id])
+  title     String
+  assignee  String?
+  dueDate   DateTime?
+  status    String     @default("OPEN") // OPEN|DONE
+  notes     String?
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  @@index([monthId])
+}
