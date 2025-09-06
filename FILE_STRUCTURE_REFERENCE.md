@@ -91,7 +91,7 @@ checklist_app/
 ### ❌ Duplicate Directories (Will Cause Module Resolution Conflicts)
 - `lib/` in root (conflicts with `src/lib/`)
 - `src/generated/` (incorrect Prisma generation)
-- `prisma/prisma/` (nested database structure)
+- **`prisma/prisma/` (nested database structure) - CAUSES DATABASE CONNECTION FAILURES**
 
 ### ❌ Incorrect File Locations
 - `src/app/api/auth/register/route.ts` (should be `src/app/api/register/route.ts`)
@@ -101,6 +101,11 @@ checklist_app/
 - `src/app/test-*/` directories
 - `create_sample_excel.js` in root
 - `cookies.txt` in root
+
+### ❌ Database Structure Issues
+- **NEVER create nested `prisma/prisma/` directories**
+- **NEVER have multiple `dev.db` files in different locations**
+- **ALWAYS ensure database file is at `prisma/dev.db` (not nested)**
 
 ## ✅ **CORRECT Module Resolution**
 
@@ -142,7 +147,7 @@ import { prisma } from './lib/db';
 
 ### Prisma Schema Location
 - **Schema**: `prisma/schema.prisma`
-- **Database**: `prisma/dev.db`
+- **Database**: `prisma/dev.db` (MUST be at this exact location)
 - **Migrations**: `prisma/migrations/`
 - **Generated Client**: `node_modules/@prisma/client` (NOT in `src/generated/`)
 
@@ -151,6 +156,30 @@ import { prisma } from './lib/db';
 DATABASE_URL="file:./prisma/dev.db"
 NEXTAUTH_SECRET="your-secret-key-here"
 NEXTAUTH_URL="http://localhost:3000"
+```
+
+### ⚠️ **CRITICAL DATABASE WARNING**
+**NEVER create nested `prisma/prisma/` directories!** This causes:
+- `PrismaClientInitializationError: Error code 14: Unable to open the database file`
+- Database connection failures
+- Application crashes
+
+**Correct Structure:**
+```
+prisma/
+├── dev.db          ✅ Correct location
+├── schema.prisma   ✅
+└── migrations/     ✅
+```
+
+**WRONG Structure:**
+```
+prisma/
+├── dev.db          ❌ Wrong location
+├── schema.prisma   ✅
+├── migrations/     ✅
+└── prisma/         ❌ NEVER create this!
+    └── dev.db      ❌ This causes connection failures
 ```
 
 ## 🚀 **Development Commands**
@@ -185,6 +214,57 @@ Before making changes, verify:
 - [ ] Environment variables are properly set
 - [ ] No test files in production directories
 
+## 🛠️ **Troubleshooting Guide**
+
+### Database Connection Issues
+**Error**: `PrismaClientInitializationError: Error code 14: Unable to open the database file`
+
+**Solution**:
+```bash
+# 1. Check for nested prisma directory
+ls -la prisma/
+# Should NOT show: prisma/prisma/
+
+# 2. Remove nested directory if it exists
+rm -rf prisma/prisma
+
+# 3. Ensure .env file exists
+cat .env
+# Should show: DATABASE_URL="file:./prisma/dev.db"
+
+# 4. Regenerate Prisma client
+npx prisma generate
+npx prisma db push
+```
+
+### JWT Session Errors
+**Error**: `JWEDecryptionFailed: decryption operation failed`
+
+**Solution**:
+```bash
+# 1. Check .env file has NEXTAUTH_SECRET
+grep NEXTAUTH_SECRET .env
+
+# 2. If missing, add it
+echo 'NEXTAUTH_SECRET="your-secret-key-here"' >> .env
+
+# 3. Restart server
+pkill -f "next dev"
+npx next dev
+```
+
+### Turbopack Build Manifest Errors
+**Error**: `ENOENT: no such file or directory, open '.next/static/development/_buildManifest.js.tmp.*'`
+
+**Solution**:
+```bash
+# 1. Remove --turbopack from package.json scripts
+# 2. Clear build cache
+rm -rf .next
+# 3. Restart server
+npx next dev
+```
+
 ## 🚨 **Common Issues to Avoid**
 
 1. **Module Resolution Conflicts**: Don't create duplicate directories
@@ -192,6 +272,9 @@ Before making changes, verify:
 3. **Database Connection**: Ensure `.env` file exists and is correct
 4. **Prisma Client**: Don't generate in `src/generated/`
 5. **File Permissions**: Ensure database file is readable/writable
+6. **Nested Prisma Directory**: NEVER create `prisma/prisma/` - causes "Unable to open database file" errors
+7. **Multiple Database Files**: Only one `dev.db` should exist at `prisma/dev.db`
+8. **JWT Session Errors**: Ensure `NEXTAUTH_SECRET` is set in `.env`
 
 ---
 

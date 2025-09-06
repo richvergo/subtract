@@ -110,6 +110,12 @@ export default function DashboardContent({ initialData }: DashboardContentProps)
     }
   };
 
+  const handleLogout = () => {
+    // Simple logout - just redirect to register page
+    // This will clear the session since the dashboard requires authentication
+    router.push('/register');
+  };
+
   if (!data.month) {
     return (
       <div className="text-center py-12">
@@ -127,7 +133,7 @@ export default function DashboardContent({ initialData }: DashboardContentProps)
 
   return (
     <div className="space-y-8">
-      {/* Header with Month Selector */}
+      {/* Header with Month Selector and Logout */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
@@ -136,23 +142,34 @@ export default function DashboardContent({ initialData }: DashboardContentProps)
           </p>
         </div>
         
-        <div className="mt-4 sm:mt-0">
-          <label htmlFor="month-select" className="block text-sm font-medium text-gray-700 mb-2">
-            Select Month
-          </label>
-          <select
-            id="month-select"
-            value={selectedMonth}
-            onChange={(e) => handleMonthChange(e.target.value)}
-            disabled={loading}
-            className="block w-full sm:w-auto px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-          >
-            {data.availableMonths.map((month) => (
-              <option key={month} value={month}>
-                {month}
-              </option>
-            ))}
-          </select>
+        <div className="mt-4 sm:mt-0 flex flex-col sm:flex-row gap-4 items-end">
+          <div>
+            <label htmlFor="month-select" className="block text-sm font-medium text-gray-700 mb-2">
+              Select Month
+            </label>
+            <select
+              id="month-select"
+              value={selectedMonth}
+              onChange={(e) => handleMonthChange(e.target.value)}
+              disabled={loading}
+              className="block w-full sm:w-auto px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+            >
+              {data.availableMonths.map((month) => (
+                <option key={month} value={month}>
+                  {month}
+                </option>
+              ))}
+            </select>
+          </div>
+          
+          <div>
+            <button
+              onClick={handleLogout}
+              className="bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700 transition-colors text-sm font-medium"
+            >
+              Logout
+            </button>
+          </div>
         </div>
       </div>
 
