@@ -20,13 +20,13 @@ model MonthClose {
   id        String   @id @default(cuid())
   userId    String
   user      User     @relation(fields: [userId], references: [id])
-  label     String   // e.g., "2025-09"
+  label     String
   startDate DateTime
   endDate   DateTime
   createdAt DateTime @default(now())
   tasks     Task[]
 
-  @@index([userId, label], map: "user_label_idx")
+  @@unique([userId, label], name: "userId_label") // 👈 this is the important line
 }
 
 model Task {

@@ -1,103 +1,150 @@
-import Image from "next/image";
+import { Suspense } from 'react';
+import { getSession } from '@/lib/auth';
+import { prisma } from '@/lib/db';
+import DashboardContent from '@/app/components/DashboardContent';
+import { redirect } from 'next/navigation';
 
-export default function Home() {
+async function getDashboardData(monthLabel?: string) {
+  const session = await getSession();
+  if (!session?.user?.email) {
+    redirect('/register');
+  }
+
+  // Find current user
+  const user = await prisma.user.findUnique({
+    where: { email: session.user.email },
+  });
+
+  if (!user) {
+    redirect('/register');
+  }
+
+  // Determine which month to load
+  let targetMonth;
+  if (monthLabel) {
+    // Load specific month
+    targetMonth = await prisma.monthClose.findUnique({
+      where: { userId_label: { userId: user.id, label: monthLabel } },
+      include: {
+        tasks: {
+          orderBy: { createdAt: 'asc' }
+        }
+      }
+    });
+  } else {
+    // Load current month or most recent
+    const currentMonth = new Date().toISOString().slice(0, 7); // YYYY-MM format
+    
+    targetMonth = await prisma.monthClose.findUnique({
+      where: { userId_label: { userId: user.id, label: currentMonth } },
+      include: {
+        tasks: {
+          orderBy: { createdAt: 'asc' }
+        }
+      }
+    });
+
+    // If current month doesn't exist, get the most recent
+    if (!targetMonth) {
+      targetMonth = await prisma.monthClose.findFirst({
+        where: { userId: user.id },
+        include: {
+          tasks: {
+            orderBy: { createdAt: 'asc' }
+          }
+        },
+        orderBy: { label: 'desc' }
+      });
+    }
+  }
+
+  // Get all available months for the selector
+  const availableMonths = await prisma.monthClose.findMany({
+    where: { userId: user.id },
+    select: { label: true },
+    orderBy: { label: 'desc' }
+  });
+
+  if (!targetMonth) {
+    return {
+      month: null,
+      checklistItems: [],
+      summary: {
+        totalTasks: 0,
+        completedTasks: 0,
+        remainingTasks: 0,
+        overdueTasks: 0,
+        completionPercentage: 0
+      },
+      availableMonths: availableMonths.map(m => m.label)
+    };
+  }
+
+  // Calculate summary statistics
+  const totalTasks = targetMonth.tasks.length;
+  const completedTasks = targetMonth.tasks.filter(task => task.status === 'DONE').length;
+  const remainingTasks = totalTasks - completedTasks;
+  
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  
+  const overdueTasks = targetMonth.tasks.filter(task => 
+    task.dueDate && 
+    task.dueDate < today && 
+    task.status === 'OPEN'
+  ).length;
+
+  const completionPercentage = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
+
+  // Group tasks by title to create checklist items
+  const checklistItems = targetMonth.tasks.reduce((acc, task) => {
+    const key = task.title;
+    if (!acc[key]) {
+      acc[key] = {
+        title: task.title,
+        tasks: [],
+        isComplete: true // Will be updated based on task statuses
+      };
+    }
+    acc[key].tasks.push(task);
+    // A checklist item is complete only if ALL its tasks are DONE
+    if (task.status !== 'DONE') {
+      acc[key].isComplete = false;
+    }
+    return acc;
+  }, {} as Record<string, { title: string; tasks: any[]; isComplete: boolean }>);
+
+  const summary = {
+    totalTasks,
+    completedTasks,
+    remainingTasks,
+    overdueTasks,
+    completionPercentage
+  };
+
+  return {
+    month: {
+      id: targetMonth.id,
+      label: targetMonth.label,
+      startDate: targetMonth.startDate,
+      endDate: targetMonth.endDate
+    },
+    checklistItems: Object.values(checklistItems),
+    summary,
+    availableMonths: availableMonths.map(m => m.label)
+  };
+}
+
+export default async function Dashboard() {
+  const data = await getDashboardData();
+
   return (
-    <div className="font-sans grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="font-mono list-inside list-decimal text-sm/6 text-center sm:text-left">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] font-mono font-semibold px-1 py-0.5 rounded">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
-
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
-        </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+    <div className="min-h-screen bg-gray-50">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <Suspense fallback={<div className="text-center py-8">Loading dashboard...</div>}>
+          <DashboardContent initialData={data} />
+        </Suspense>
+      </div>
     </div>
   );
 }

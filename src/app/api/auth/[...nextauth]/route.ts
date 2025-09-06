@@ -4,6 +4,16 @@ import { prisma } from "@/lib/db";
 import { compare } from "bcryptjs";
 import { z } from "zod";
 
+declare module "next-auth" {
+  interface Session {
+    user: {
+      id: string;
+      email: string;
+      name: string;
+    };
+  }
+}
+
 const LoginSchema = z.object({
   email: z.string().email(),
   password: z.string().min(6)
@@ -12,6 +22,24 @@ const LoginSchema = z.object({
 export const authOptions: AuthOptions = {
   secret: process.env.NEXTAUTH_SECRET,
   session: { strategy: "jwt" },
+  callbacks: {
+    async jwt({ token, user }) {
+      if (user) {
+        token.id = user.id;
+        token.email = user.email;
+        token.name = user.name;
+      }
+      return token;
+    },
+    async session({ session, token }) {
+      if (token && session.user) {
+        session.user.id = token.id as string;
+        session.user.email = token.email as string;
+        session.user.name = token.name as string;
+      }
+      return session;
+    }
+  },
   providers: [
     Credentials({
       name: "Credentials",
