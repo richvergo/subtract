@@ -3,12 +3,11 @@ import { prisma } from '@/lib/db';
 import { getSession } from '@/lib/auth';
 import { z } from 'zod';
 
-const UpdateTaskSchema = z.object({
+const UpdateChecklistItemSchema = z.object({
   title: z.string().min(1, 'Title is required').optional(),
   assignee: z.string().optional(),
   dueDate: z.string().optional(),
   status: z.enum(['NOT_STARTED', 'IN_PROGRESS', 'DONE']).optional(),
-  notes: z.string().optional(),
 });
 
 export async function PATCH(
@@ -23,10 +22,10 @@ export async function PATCH(
 
     const { id } = await params;
     const body = await request.json();
-    const updateData = UpdateTaskSchema.parse(body);
+    const updateData = UpdateChecklistItemSchema.parse(body);
 
-    // Verify the task belongs to the current user
-    const existingTask = await prisma.task.findFirst({
+    // Verify the checklist item belongs to the current user
+    const existingItem = await prisma.checklistItem.findFirst({
       where: {
         id,
         month: {
@@ -35,8 +34,8 @@ export async function PATCH(
       }
     });
 
-    if (!existingTask) {
-      return NextResponse.json({ error: 'Task not found' }, { status: 404 });
+    if (!existingItem) {
+      return NextResponse.json({ error: 'Checklist item not found' }, { status: 404 });
     }
 
     // Prepare update data
@@ -45,16 +44,17 @@ export async function PATCH(
       dataToUpdate.dueDate = new Date(updateData.dueDate);
     }
 
-    const updatedTask = await prisma.task.update({
+    // Update the checklist item
+    const updatedItem = await prisma.checklistItem.update({
       where: { id },
       data: dataToUpdate,
     });
 
-    return NextResponse.json(updatedTask);
+    return NextResponse.json(updatedItem);
   } catch (error: unknown) {
-    console.error('Error updating task:', error);
+    console.error('Error updating checklist item:', error);
     return NextResponse.json(
-      { error: 'Failed to update task', details: error instanceof Error ? error.message : 'Unknown error' },
+      { error: 'Failed to update checklist item', details: error instanceof Error ? error.message : 'Unknown error' },
       { status: 400 }
     );
   }
@@ -72,8 +72,8 @@ export async function DELETE(
 
     const { id } = await params;
 
-    // Verify the task belongs to the current user
-    const existingTask = await prisma.task.findFirst({
+    // Verify the checklist item belongs to the current user
+    const existingItem = await prisma.checklistItem.findFirst({
       where: {
         id,
         month: {
@@ -82,19 +82,25 @@ export async function DELETE(
       }
     });
 
-    if (!existingTask) {
-      return NextResponse.json({ error: 'Task not found' }, { status: 404 });
+    if (!existingItem) {
+      return NextResponse.json({ error: 'Checklist item not found' }, { status: 404 });
     }
 
-    await prisma.task.delete({
-      where: { id },
+    // Delete associated tasks first
+    await prisma.task.deleteMany({
+      where: { checklistItemId: id }
     });
 
-    return NextResponse.json({ message: 'Task deleted successfully' });
+    // Delete the checklist item
+    await prisma.checklistItem.delete({
+      where: { id }
+    });
+
+    return NextResponse.json({ message: 'Checklist item deleted successfully' });
   } catch (error: unknown) {
-    console.error('Error deleting task:', error);
+    console.error('Error deleting checklist item:', error);
     return NextResponse.json(
-      { error: 'Failed to delete task', details: error instanceof Error ? error.message : 'Unknown error' },
+      { error: 'Failed to delete checklist item', details: error instanceof Error ? error.message : 'Unknown error' },
       { status: 400 }
     );
   }

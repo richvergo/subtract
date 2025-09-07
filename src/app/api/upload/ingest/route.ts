@@ -77,8 +77,16 @@ export async function POST(req: Request) {
           title: getStringValue(row["Item"]) || getStringValue(row["Task"]) || "Untitled",
           assignee: getStringValue(row["Owner"]) || getStringValue(row["Assignee"]) || null,
           dueDate: excelDateToJSDate(row["Due Date"]),
-          status:
-            (getStringValue(row["Status"]) || "OPEN").toUpperCase() === "DONE" ? "DONE" : "OPEN",
+          status: (() => {
+            const statusValue = (getStringValue(row["Status"]) || "NOT_STARTED").toUpperCase();
+            if (statusValue === "DONE" || statusValue === "COMPLETED" || statusValue === "FINISHED") {
+              return "DONE";
+            } else if (statusValue === "IN_PROGRESS" || statusValue === "IN PROGRESS" || statusValue === "WORKING") {
+              return "IN_PROGRESS";
+            } else {
+              return "NOT_STARTED";
+            }
+          })(),
           notes: getStringValue(row["Notes"]) || null,
         },
       });

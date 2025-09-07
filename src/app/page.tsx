@@ -1,7 +1,7 @@
 import { Suspense } from 'react';
 import { getSession } from '@/lib/auth';
 import { prisma } from '@/lib/db';
-import DashboardContent from '@/app/components/DashboardContent';
+import EnhancedDashboardContent from '@/app/components/EnhancedDashboardContent';
 import { redirect } from 'next/navigation';
 
 async function getDashboardData(monthLabel?: string) {
@@ -26,7 +26,16 @@ async function getDashboardData(monthLabel?: string) {
     targetMonth = await prisma.monthClose.findUnique({
       where: { userId_label: { userId: user.id, label: monthLabel } },
       include: {
+        checklistItems: {
+          include: {
+            tasks: {
+              orderBy: { createdAt: 'asc' }
+            }
+          },
+          orderBy: { createdAt: 'asc' }
+        },
         tasks: {
+          where: { checklistItemId: null }, // Tasks not associated with checklist items
           orderBy: { createdAt: 'asc' }
         }
       }
@@ -38,7 +47,16 @@ async function getDashboardData(monthLabel?: string) {
     targetMonth = await prisma.monthClose.findUnique({
       where: { userId_label: { userId: user.id, label: currentMonth } },
       include: {
+        checklistItems: {
+          include: {
+            tasks: {
+              orderBy: { createdAt: 'asc' }
+            }
+          },
+          orderBy: { createdAt: 'asc' }
+        },
         tasks: {
+          where: { checklistItemId: null }, // Tasks not associated with checklist items
           orderBy: { createdAt: 'asc' }
         }
       }
@@ -49,7 +67,16 @@ async function getDashboardData(monthLabel?: string) {
       targetMonth = await prisma.monthClose.findFirst({
         where: { userId: user.id },
         include: {
+          checklistItems: {
+            include: {
+              tasks: {
+                orderBy: { createdAt: 'asc' }
+              }
+            },
+            orderBy: { createdAt: 'asc' }
+          },
           tasks: {
+            where: { checklistItemId: null }, // Tasks not associated with checklist items
             orderBy: { createdAt: 'asc' }
           }
         },
@@ -81,38 +108,54 @@ async function getDashboardData(monthLabel?: string) {
   }
 
   // Calculate summary statistics
-  const totalTasks = targetMonth.tasks.length;
-  const completedTasks = targetMonth.tasks.filter(task => task.status === 'DONE').length;
+  const allTasks = [
+    ...targetMonth.tasks,
+    ...targetMonth.checklistItems.flatMap(item => item.tasks)
+  ];
+  
+  const totalTasks = allTasks.length;
+  const completedTasks = allTasks.filter(task => task.status === 'DONE').length;
   const remainingTasks = totalTasks - completedTasks;
   
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   
-  const overdueTasks = targetMonth.tasks.filter(task => 
+  const overdueTasks = allTasks.filter(task => 
     task.dueDate && 
     task.dueDate < today && 
-    task.status === 'OPEN'
+    task.status !== 'DONE'
   ).length;
 
   const completionPercentage = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
 
-  // Group tasks by title to create checklist items
-  const checklistItems = targetMonth.tasks.reduce((acc, task) => {
-    const key = task.title;
-    if (!acc[key]) {
-      acc[key] = {
-        title: task.title,
-        tasks: [],
-        isComplete: true // Will be updated based on task statuses
-      };
-    }
-    acc[key].tasks.push(task);
+  // Process checklist items
+  const checklistItems = targetMonth.checklistItems.map(item => {
     // A checklist item is complete only if ALL its tasks are DONE
-    if (task.status !== 'DONE') {
-      acc[key].isComplete = false;
-    }
-    return acc;
-  }, {} as Record<string, { title: string; tasks: any[]; isComplete: boolean }>);
+    const isComplete = item.tasks.length > 0 ? item.tasks.every(task => task.status === 'DONE') : item.status === 'DONE';
+    
+    return {
+      id: item.id,
+      title: item.title,
+      assignee: item.assignee,
+      dueDate: item.dueDate,
+      status: item.status,
+      tasks: item.tasks,
+      isComplete
+    };
+  });
+
+  // Add standalone tasks as checklist items
+  const standaloneTasks = targetMonth.tasks.map(task => ({
+    id: task.id,
+    title: task.title,
+    assignee: task.assignee,
+    dueDate: task.dueDate,
+    status: task.status,
+    tasks: [task],
+    isComplete: task.status === 'DONE'
+  }));
+
+  const allChecklistItems = [...checklistItems, ...standaloneTasks];
 
   const summary = {
     totalTasks,
@@ -129,7 +172,7 @@ async function getDashboardData(monthLabel?: string) {
       startDate: targetMonth.startDate,
       endDate: targetMonth.endDate
     },
-    checklistItems: Object.values(checklistItems),
+    checklistItems: allChecklistItems,
     summary,
     availableMonths: availableMonths.map(m => m.label)
   };
@@ -142,7 +185,7 @@ export default async function Dashboard() {
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <Suspense fallback={<div className="text-center py-8">Loading dashboard...</div>}>
-          <DashboardContent initialData={data} />
+          <EnhancedDashboardContent initialData={data} />
         </Suspense>
       </div>
     </div>
