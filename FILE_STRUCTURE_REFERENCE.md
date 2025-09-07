@@ -44,46 +44,56 @@ checklist_app/
 │   ├── app/                      # Next.js App Router
 │   │   ├── api/                  # API routes
 │   │   │   ├── auth/
-│   │   │   │   └── [...nextauth]/
+│   │   │   │   ├── [...nextauth]/
+│   │   │   │   │   └── route.ts
+│   │   │   │   └── switch-entity/
 │   │   │   │       └── route.ts
-│   │   │   ├── dashboard/
-│   │   │   │   └── route.ts
-│   │   │   ├── health/
-│   │   │   │   └── route.ts
-│   │   │   ├── months/
-│   │   │   │   └── route.ts
-│   │   │   ├── register/
-│   │   │   │   └── route.ts
-│   │   │   ├── tasks/
+│   │   │   ├── checklist/
 │   │   │   │   ├── [id]/
 │   │   │   │   │   └── route.ts
 │   │   │   │   └── route.ts
-│   │   │   ├── upload/
-│   │   │   │   ├── ingest/
-│   │   │   │   │   └── route.ts
-│   │   │   │   └── preview/
+│   │   │   ├── dashboard/
+│   │   │   │   └── route.ts
+│   │   │   ├── entities/
+│   │   │   │   ├── [id]/
+│   │   │   │   │   └── invite/
+│   │   │   │   │       └── route.ts
+│   │   │   │   └── route.ts
+│   │   │   ├── memberships/
+│   │   │   │   └── [id]/
 │   │   │   │       └── route.ts
-│   │   │   └── users/
-│   │   │       └── route.ts
+│   │   │   ├── register/
+│   │   │   │   └── route.ts
+│   │   │   └── tasks/
+│   │   │       └── [id]/
+│   │   │           └── route.ts
 │   │   ├── components/           # React components
-│   │   │   └── DashboardContent.tsx
+│   │   │   ├── DashboardContent.tsx
+│   │   │   ├── EnhancedDashboardContent.tsx
+│   │   │   ├── EntitySwitcher.tsx
+│   │   │   ├── LayoutWithSidebar.tsx
+│   │   │   ├── Providers.tsx
+│   │   │   ├── Sidebar.tsx
+│   │   │   ├── StatusBadge.tsx
+│   │   │   └── StatusSelect.tsx
+│   │   ├── documents/            # Documents page
+│   │   │   └── page.tsx
 │   │   ├── register/             # Registration page
 │   │   │   └── page.tsx
-│   │   ├── upload/               # Upload page
+│   │   ├── tasks/                # Tasks page
 │   │   │   └── page.tsx
 │   │   ├── favicon.ico
 │   │   ├── globals.css           # Global styles
-│   │   ├── layout.tsx            # Root layout
+│   │   ├── layout.tsx            # Root layout with sidebar
 │   │   └── page.tsx              # Dashboard page
 │   │
 │   └── lib/                      # Utility libraries
 │       ├── auth.ts               # Authentication helpers
 │       ├── db.ts                 # Prisma client
-│       └── env.ts                # Environment validation
+│       ├── env.ts                # Environment validation
+│       └── permissions.ts        # RBAC middleware and helpers
 │
-└── tests/                        # Test files
-    └── fixtures/
-        └── sample_checklist.xlsx
+└── tests/                        # Test files (empty - no fixtures needed)
 ```
 
 ## 🚫 **CRITICAL: DO NOT CREATE THESE**
@@ -121,13 +131,14 @@ checklist_app/
 ### Import Examples
 ```typescript
 // ✅ CORRECT
-import { prisma } from '@/lib/db';
+import { db } from '@/lib/db';
 import { getSession } from '@/lib/auth';
 import { env } from '@/lib/env';
+import { requirePermission } from '@/lib/permissions';
 
 // ❌ WRONG (will cause conflicts)
-import { prisma } from '../../../lib/db';
-import { prisma } from './lib/db';
+import { db } from '../../../lib/db';
+import { db } from './lib/db';
 ```
 
 ## 🔧 **Package.json Scripts**
@@ -278,6 +289,6 @@ npx next dev
 
 ---
 
-**Last Updated**: September 6, 2025  
-**Version**: 1.0  
-**Status**: ✅ Verified and Working
+**Last Updated**: September 7, 2025  
+**Version**: 2.0 - Multi-Entity Architecture  
+**Status**: ✅ Verified and Working with RBAC
