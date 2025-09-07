@@ -109,9 +109,6 @@ export default function EnhancedDashboardContent({ initialData }: DashboardConte
     return new Date(dueDate) < today;
   };
 
-  const handleLogout = () => {
-    router.push('/register');
-  };
 
   const createChecklistItem = async () => {
     if (!newItemTitle.trim() || !data.month) return;
@@ -230,7 +227,7 @@ export default function EnhancedDashboardContent({ initialData }: DashboardConte
 
   if (!data.month) {
     return (
-      <div className="text-center py-12">
+      <div className="p-8 text-center py-12">
         <h1 className="text-2xl font-bold text-gray-900 mb-4">Welcome to Your Checklist!</h1>
         <p className="text-gray-600 mb-8">Start by adding your first checklist item to get organized.</p>
         <button
@@ -244,11 +241,11 @@ export default function EnhancedDashboardContent({ initialData }: DashboardConte
   }
 
   return (
-    <div className="space-y-8">
-      {/* Header with Month Selector and Logout */}
+    <div className="p-8 space-y-8">
+      {/* Header with Month Selector */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Enhanced Dashboard</h1>
+          <h1 className="text-3xl font-bold text-gray-900">Checklist Dashboard</h1>
           <p className="text-gray-600 mt-1">
             {data.month.label} - {new Date(data.month.startDate).toLocaleDateString()} to {new Date(data.month.endDate).toLocaleDateString()}
           </p>
@@ -274,14 +271,6 @@ export default function EnhancedDashboardContent({ initialData }: DashboardConte
             </select>
           </div>
           
-          <div>
-            <button
-              onClick={handleLogout}
-              className="bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700 transition-colors text-sm font-medium"
-            >
-              Logout
-            </button>
-          </div>
         </div>
       </div>
 
