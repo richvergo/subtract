@@ -10,11 +10,8 @@
 
 ### First Login
 1. User registers & logs in.  
-2. System checks if they have any checklists:  
-   - **If none:** prompt with two options:  
-     - **Upload existing Excel/CSV checklist** (columns: Item, Due Date, Owner, Status, Task if applicable).  
-     - **Create a blank checklist manually.**  
-   - System creates the checklist for the current month (e.g. `2025-09`).  
+2. System automatically creates a MonthClose for the current month (e.g. `2025-09`) if none exists.  
+3. User sees an empty dashboard with a "Add Your First Checklist Item" button to start building their checklist manually.  
 
 ### Returning Login
 1. User lands on **current month’s checklist** by default.  
@@ -42,9 +39,9 @@ When user logs in:
 - Progress metrics: % complete, # overdue, # tasks remaining.  
 - **Month selector (top bar)** controls which month is displayed.  
 - Actions:  
-  - `Upload Checklist` (for first-time setup).  
   - `Add Checklist Item`.  
   - `Add Task` (within a checklist item).  
+  - `Edit/Delete` checklist items and tasks.  
   - `Clone Previous Month`.  
   - `Export CSV`.  
 
@@ -60,25 +57,25 @@ When user logs in:
 - Relation: `checklistItems`
 
 ### ChecklistItem
-- `id`, `monthId`, `title`, `owner`, `dueDate`, `status (OPEN|DONE)`, `notes`
+- `id`, `monthId`, `title`, `assignee`, `dueDate`, `status (NOT_STARTED|IN_PROGRESS|DONE)`, `notes`
 - Relation: `tasks`
 
 ### Task
-- `id`, `checklistItemId`, `title`, `assignee`, `dueDate`, `status (OPEN|DONE)`, `notes`
+- `id`, `checklistItemId`, `title`, `assignee`, `dueDate`, `status (NOT_STARTED|IN_PROGRESS|DONE)`, `notes`
 
 ---
 
 ## Acceptance Criteria
 1. User can register & login.  
-2. First-time login shows onboarding choice (upload or create).  
-3. Uploaded file parses headers → maps to checklist items and tasks.  
-4. System creates a **MonthClose** with checklist items + tasks for current month.  
+2. First-time login automatically creates current month and shows empty dashboard.  
+3. User can manually add checklist items and tasks through the dashboard.  
+4. System creates a **MonthClose** for current month on first login.  
 5. Returning login → system defaults to current month.  
-6. User can toggle task `DONE` / `OPEN`.  
+6. User can update task status (`NOT_STARTED`, `IN_PROGRESS`, `DONE`).  
 7. Checklist item automatically moves to `DONE` only if all tasks are done.  
 8. Progress bar updates correctly at both checklist + task level.  
 9. User can navigate between months.  
-10. “Clone previous month” creates a new checklist with rolled dates.  
+10. "Clone previous month" creates a new checklist with rolled dates.  
 11. Export CSV includes checklist items and tasks with status.  
 12. Users only see their own data.  
 

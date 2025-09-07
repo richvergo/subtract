@@ -6,7 +6,7 @@
 - **Auth:** NextAuth (Credentials provider, email+password)
 - **Database:** Prisma (SQLite for dev, Postgres for prod)
 - **Validation:** Zod
-- **File Parsing:** SheetJS (xlsx)
+- **File Parsing:** Removed (manual creation only)
 - **Testing:** Vitest (unit/integration) + Playwright (E2E)
 
 ---
@@ -15,12 +15,12 @@
 /src/app # App Router pages and API
 /api # Backend endpoints
 /auth # Auth (register, login, session)
-/upload # Upload (preview, ingest)
+/checklist # Checklist management
 /months # Month management
 /tasks # Task management
 /login # Login page
 /register # Registration page
-/upload # Upload UI
+# Upload UI removed
 /page.tsx # Dashboard (home)
 /layout.tsx # Root layout
 
@@ -35,7 +35,7 @@ auth.ts # Session helper
 /unit
 /integration
 /e2e
-/fixtures # Test Excel/CSV files
+# Test fixtures removed
 
 /prisma # Database schema + migrations
 
@@ -87,16 +87,16 @@ Copy code
 
 - **Integration tests:**
   - API endpoints handle happy-path + failure cases.
-  - Upload + ingest correctly create checklist items + tasks.
+  - Manual checklist creation and task management.
   - Cloning rolls due dates and resets statuses.
 
 - **E2E tests (Playwright):**
-  - Golden path: register → login → upload → preview → ingest → dashboard → mark tasks → checklist auto-updates → clone → export.
+  - Golden path: register → login → auto-create month → add checklist item → add tasks → update statuses → assign users → dashboard reflects progress.
   - Negative tests: invalid login, unauthorized access.
 
 - **Fixtures:**
-  - Valid sample Excel checklist.
-  - Bad headers checklist for error testing.
+  - Test data for manual checklist creation.
+  - Sample checklist items and tasks for testing.
 
 - **CI Gates:**
   - Lint ✅

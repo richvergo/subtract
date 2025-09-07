@@ -4,7 +4,7 @@ import { useState } from "react";
 
 export default function UploadPage() {
   const [headers, setHeaders] = useState<string[]>([]);
-  const [sample, setSample] = useState<unknown[][]>([]);
+  const [sample, setSample] = useState<any[][]>([]);
   const [message, setMessage] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [label, setLabel] = useState("");
@@ -104,7 +104,7 @@ export default function UploadPage() {
               {sample.map((row, i) => (
                 <tr key={i}>
                   {row.map((cell, j) => (
-                    <td key={j}>{String(cell)}</td>
+                    <td key={j}>{cell}</td>
                   ))}
                 </tr>
               ))}

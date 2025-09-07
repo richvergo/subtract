@@ -64,7 +64,7 @@ export async function GET(request: NextRequest) {
         }
       });
 
-      // If current month doesn't exist, get the most recent
+      // If current month doesn't exist, get the most recent or create current month
       if (!targetMonth) {
         targetMonth = await prisma.monthClose.findFirst({
           where: { userId: user.id },
@@ -84,6 +84,41 @@ export async function GET(request: NextRequest) {
           },
           orderBy: { label: 'desc' }
         });
+
+        // If no months exist at all, create the current month
+        if (!targetMonth) {
+          const startDate = new Date();
+          startDate.setDate(1);
+          startDate.setHours(0, 0, 0, 0);
+          
+          const endDate = new Date(startDate);
+          endDate.setMonth(endDate.getMonth() + 1);
+          endDate.setDate(0);
+          endDate.setHours(23, 59, 59, 999);
+
+          targetMonth = await prisma.monthClose.create({
+            data: {
+              userId: user.id,
+              label: currentMonth,
+              startDate,
+              endDate
+            },
+            include: {
+              checklistItems: {
+                include: {
+                  tasks: {
+                    orderBy: { createdAt: 'asc' }
+                  }
+                },
+                orderBy: { createdAt: 'asc' }
+              },
+              tasks: {
+                where: { checklistItemId: null },
+                orderBy: { createdAt: 'asc' }
+              }
+            }
+          });
+        }
       }
     }
 

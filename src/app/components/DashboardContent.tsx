@@ -119,13 +119,13 @@ export default function DashboardContent({ initialData }: DashboardContentProps)
   if (!data.month) {
     return (
       <div className="text-center py-12">
-        <h1 className="text-2xl font-bold text-gray-900 mb-4">No Data Available</h1>
-        <p className="text-gray-600 mb-8">You don't have any months with data yet.</p>
+        <h1 className="text-2xl font-bold text-gray-900 mb-4">Welcome to Your Checklist!</h1>
+        <p className="text-gray-600 mb-8">Start by adding your first checklist item to get organized.</p>
         <button
-          onClick={() => router.push('/upload')}
+          onClick={() => window.location.reload()}
           className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors"
         >
-          Upload Your First Checklist
+          Add Your First Checklist Item
         </button>
       </div>
     );

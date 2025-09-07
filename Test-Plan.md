@@ -12,9 +12,9 @@
   - Checklist item marked DONE only if all tasks are DONE.  
   - Checklist reverts to OPEN if a task is reopened.  
 
-- **Upload parsing**  
-  - File must contain at least 1 valid row.  
-  - Reject files missing required headers.  
+- **Manual checklist creation**  
+  - Checklist items can be created with required fields.  
+  - Tasks can be added to checklist items.  
 
 ---
 
@@ -28,9 +28,9 @@
   - Valid credentials → session created.  
   - Invalid credentials → 401.  
 
-- **Upload → Ingest**  
-  - Valid file creates checklist items + tasks.  
-  - Invalid file → 400 with helpful message.  
+- **Checklist CRUD**  
+  - Create, read, update, delete checklist items.  
+  - Create, read, update, delete tasks within checklist items.  
 
 - **Month management**  
   - `POST /api/months` → creates month if missing.  
@@ -52,28 +52,26 @@
 **Golden Path**  
 1. Register a user.  
 2. Login.  
-3. Upload a file with checklist items + tasks.  
-4. See current month populated.  
-5. Mark all but one task DONE → checklist item remains OPEN.  
-6. Mark last task DONE → checklist item moves to DONE.  
-7. Clone month → new month created with reset statuses.  
-8. Export CSV → file downloads with correct structure.  
+3. System auto-creates current month.  
+4. Add first checklist item manually.  
+5. Add tasks to the checklist item.  
+6. Mark all but one task DONE → checklist item remains IN_PROGRESS.  
+7. Mark last task DONE → checklist item moves to DONE.  
+8. Update assignees and due dates.  
+9. Dashboard reflects progress correctly.  
 
 **Other Flows**  
-- First-time user creates blank checklist manually.  
-- Returning user lands on current month.  
-- Unauthorized user cannot access another user’s checklist.  
+- First-time user sees empty dashboard with "Add Your First Checklist Item" button.  
+- Returning user lands on current month with existing data.  
+- Unauthorized user cannot access another user's checklist.  
 
 ---
 
 ## Fixtures
 
-- `/tests/fixtures/sample_checklist.xlsx`  
-  - Columns: Item, Due Date, Owner, Status, Task (optional).  
-  - Checklist items with multiple tasks.  
-
-- `/tests/fixtures/bad_headers.xlsx`  
-  - Wrong headers → triggers mapping.  
+- Test data for manual checklist creation  
+  - Sample checklist items with various statuses.  
+  - Sample tasks with different assignees and due dates.  
 
 ---
 
