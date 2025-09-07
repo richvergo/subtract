@@ -172,9 +172,14 @@ async function getDashboardData(monthLabel?: string) {
       id: item.id,
       title: item.title,
       assignee: item.assignee,
-      dueDate: item.dueDate,
+      dueDate: item.dueDate?.toISOString() || null,
       status: item.status,
-      tasks: item.tasks,
+      tasks: item.tasks.map(task => ({
+        ...task,
+        dueDate: task.dueDate?.toISOString() || null,
+        createdAt: task.createdAt.toISOString(),
+        updatedAt: task.updatedAt.toISOString()
+      })),
       isComplete
     };
   });
@@ -184,9 +189,14 @@ async function getDashboardData(monthLabel?: string) {
     id: task.id,
     title: task.title,
     assignee: task.assignee,
-    dueDate: task.dueDate,
+    dueDate: task.dueDate?.toISOString() || null,
     status: task.status,
-    tasks: [task],
+    tasks: [{
+      ...task,
+      dueDate: task.dueDate?.toISOString() || null,
+      createdAt: task.createdAt.toISOString(),
+      updatedAt: task.updatedAt.toISOString()
+    }],
     isComplete: task.status === 'DONE'
   }));
 
@@ -204,8 +214,8 @@ async function getDashboardData(monthLabel?: string) {
     month: {
       id: targetMonth.id,
       label: targetMonth.label,
-      startDate: targetMonth.startDate,
-      endDate: targetMonth.endDate
+      startDate: targetMonth.startDate.toISOString(),
+      endDate: targetMonth.endDate.toISOString()
     },
     checklistItems: allChecklistItems,
     summary,
@@ -217,12 +227,10 @@ export default async function Dashboard() {
   const data = await getDashboardData();
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <Suspense fallback={<div className="text-center py-8">Loading dashboard...</div>}>
-          <EnhancedDashboardContent initialData={data} />
-        </Suspense>
-      </div>
+    <div className="p-6">
+      <Suspense fallback={<div className="text-center py-8">Loading dashboard...</div>}>
+        <EnhancedDashboardContent initialData={data} />
+      </Suspense>
     </div>
   );
 }

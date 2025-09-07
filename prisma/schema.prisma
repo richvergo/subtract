@@ -7,64 +7,83 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-enum Status {
-  NOT_STARTED
-  IN_PROGRESS
-  DONE
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  passwordHash  String
+  name          String?
+  createdAt     DateTime  @default(now())
+  memberships   Membership[]
 }
 
-model User {
-  id           String      @id @default(cuid())
-  email        String      @unique
-  passwordHash String
-  name         String?
-  createdAt    DateTime    @default(now())
-  months       MonthClose[]
+model Entity {
+  id          String        @id @default(cuid())
+  name        String
+  createdAt   DateTime      @default(now())
+  memberships Membership[]
+  months      MonthClose[]
+}
+
+model Membership {
+  id       String   @id @default(cuid())
+  userId   String
+  entityId String
+  role     Role     @default(EMPLOYEE)
+
+  user     User     @relation(fields: [userId], references: [id])
+  entity   Entity   @relation(fields: [entityId], references: [id])
+
+  @@unique([userId, entityId])
+}
+
+enum Role {
+  ADMIN       // owner of entity, can invite/remove, manage billing
+  MANAGER     // can see everything, cannot manage users
+  EMPLOYEE    // can only see assigned items
 }
 
 model MonthClose {
-  id             String         @id @default(cuid())
-  userId         String
-  user           User           @relation(fields: [userId], references: [id])
-  label          String
-  startDate      DateTime
-  endDate        DateTime
-  createdAt      DateTime       @default(now())
-  tasks          Task[]
+  id        String         @id @default(cuid())
+  entityId  String
+  label     String
+  startDate DateTime
+  endDate   DateTime
+  createdAt DateTime       @default(now())
+
+  entity    Entity         @relation(fields: [entityId], references: [id])
   checklistItems ChecklistItem[]
 
-  @@unique([userId, label], name: "userId_label")
+  @@unique([entityId, label])
 }
 
 model ChecklistItem {
   id        String   @id @default(cuid())
   monthId   String
-  month     MonthClose @relation(fields: [monthId], references: [id])
   title     String
+  owner     String?
   assignee  String?
   dueDate   DateTime?
   status    Status   @default(NOT_STARTED)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  tasks     Task[]
+  notes     String?
 
-  @@index([monthId])
+  month     MonthClose @relation(fields: [monthId], references: [id])
+  tasks     Task[]
 }
 
 model Task {
-  id             String        @id @default(cuid())
-  monthId        String
-  month          MonthClose    @relation(fields: [monthId], references: [id])
-  checklistItemId String?
-  checklistItem  ChecklistItem? @relation(fields: [checklistItemId], references: [id])
-  title          String
-  assignee       String?
-  dueDate        DateTime?
-  status         Status        @default(NOT_STARTED)
-  notes          String?
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime      @updatedAt
+  id              String   @id @default(cuid())
+  checklistItemId String
+  title           String
+  assignee        String?
+  dueDate         DateTime?
+  status          Status   @default(NOT_STARTED)
+  notes           String?
 
-  @@index([monthId])
-  @@index([checklistItemId])
+  checklistItem   ChecklistItem @relation(fields: [checklistItemId], references: [id])
+}
+
+enum Status {
+  NOT_STARTED
+  IN_PROGRESS
+  DONE
 }

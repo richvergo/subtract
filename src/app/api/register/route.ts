@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/db";
+import { db } from "@/lib/db";
 import { hash } from "bcryptjs";
 import { z } from "zod";
 
@@ -15,7 +15,7 @@ export async function POST(req: Request) {
     const { email, password, name } = RegisterSchema.parse(body);
 
     // Check if user already exists
-    const existingUser = await prisma.user.findUnique({ where: { email } });
+    const existingUser = await db.user.findUnique({ where: { email } });
     if (existingUser) {
       return NextResponse.json(
         { error: "Email already registered" },
@@ -27,7 +27,7 @@ export async function POST(req: Request) {
     const passwordHash = await hash(password, 10);
 
     // Create user
-    await prisma.user.create({
+    await db.user.create({
       data: { email, passwordHash, name }
     });
 

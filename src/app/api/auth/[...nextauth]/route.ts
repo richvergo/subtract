@@ -1,6 +1,6 @@
 import NextAuth, { AuthOptions } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
-import { prisma } from "@/lib/db";
+import { db } from "@/lib/db";
 import { compare } from "bcryptjs";
 import { z } from "zod";
 
@@ -10,7 +10,31 @@ declare module "next-auth" {
       id: string;
       email: string;
       name: string;
+      memberships: Array<{
+        id: string;
+        role: string;
+        entity: {
+          id: string;
+          name: string;
+        };
+      }>;
+      activeEntityId?: string;
     };
+  }
+
+  interface User {
+    id: string;
+    email: string;
+    name: string;
+    memberships: Array<{
+      id: string;
+      role: string;
+      entity: {
+        id: string;
+        name: string;
+      };
+    }>;
+    activeEntityId?: string;
   }
 }
 
@@ -28,6 +52,8 @@ export const authOptions: AuthOptions = {
         token.id = user.id;
         token.email = user.email;
         token.name = user.name;
+        token.memberships = user.memberships;
+        token.activeEntityId = user.activeEntityId;
       }
       return token;
     },
@@ -36,6 +62,15 @@ export const authOptions: AuthOptions = {
         session.user.id = token.id as string;
         session.user.email = token.email as string;
         session.user.name = token.name as string;
+        session.user.memberships = token.memberships as Array<{
+          id: string;
+          role: string;
+          entity: {
+            id: string;
+            name: string;
+          };
+        }>;
+        session.user.activeEntityId = token.activeEntityId as string | undefined;
       }
       return session;
     }
@@ -52,13 +87,42 @@ export const authOptions: AuthOptions = {
         if (!parsed.success) return null;
 
         const { email, password } = parsed.data;
-        const user = await prisma.user.findUnique({ where: { email } });
+        const user = await db.user.findUnique({ 
+          where: { email },
+          include: {
+            memberships: {
+              include: {
+                entity: {
+                  select: {
+                    id: true,
+                    name: true,
+                  },
+                },
+              },
+            },
+          },
+        } as any) as any;
         if (!user) return null;
 
         const isValid = await compare(password, user.passwordHash);
         if (!isValid) return null;
 
-        return { id: user.id, email: user.email, name: user.name || "" };
+        // Set the first entity as active by default
+        const activeEntityId = user.memberships.length > 0 
+          ? user.memberships[0].entity.id 
+          : undefined;
+
+        return { 
+          id: user.id, 
+          email: user.email, 
+          name: user.name || "",
+          memberships: user.memberships.map((m: any) => ({
+            id: m.id,
+            role: m.role,
+            entity: m.entity,
+          })),
+          activeEntityId,
+        };
       }
     })
   ]

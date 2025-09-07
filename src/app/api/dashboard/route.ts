@@ -1,32 +1,41 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/db';
-import { getSession } from '@/lib/auth';
+import { db } from '@/lib/db';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import { getUserWithMemberships, canAccessEntity } from '@/lib/permissions';
 
 export async function GET(request: NextRequest) {
   try {
-    const session = await getSession();
+    const session = await getServerSession(authOptions);
     if (!session?.user?.email) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const { searchParams } = new URL(request.url);
     const monthLabel = searchParams.get('month');
+    const entityId = searchParams.get('entityId') || session.user.activeEntityId;
 
-    // Find current user
-    const user = await prisma.user.findUnique({
-      where: { email: session.user.email },
-    });
+    if (!entityId) {
+      return NextResponse.json({ error: 'No active entity' }, { status: 400 });
+    }
 
+    // Get user with memberships
+    const user = await getUserWithMemberships();
     if (!user) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    }
+
+    // Check if user has access to this entity
+    if (!canAccessEntity(user, entityId)) {
+      return NextResponse.json({ error: 'Access denied to entity' }, { status: 403 });
     }
 
     // Determine which month to load
     let targetMonth;
     if (monthLabel) {
       // Load specific month
-      targetMonth = await prisma.monthClose.findUnique({
-        where: { userId_label: { userId: user.id, label: monthLabel } },
+      targetMonth = await db.monthClose.findUnique({
+        where: { entityId_label: { entityId, label: monthLabel } },
         include: {
           checklistItems: {
             include: {
@@ -34,10 +43,6 @@ export async function GET(request: NextRequest) {
                 orderBy: { createdAt: 'asc' }
               }
             },
-            orderBy: { createdAt: 'asc' }
-          },
-          tasks: {
-            where: { checklistItemId: null }, // Tasks not associated with checklist items
             orderBy: { createdAt: 'asc' }
           }
         }
@@ -46,8 +51,8 @@ export async function GET(request: NextRequest) {
       // Load current month or most recent
       const currentMonth = new Date().toISOString().slice(0, 7); // YYYY-MM format
       
-      targetMonth = await prisma.monthClose.findUnique({
-        where: { userId_label: { userId: user.id, label: currentMonth } },
+      targetMonth = await db.monthClose.findUnique({
+        where: { entityId_label: { entityId, label: currentMonth } },
         include: {
           checklistItems: {
             include: {
@@ -56,18 +61,14 @@ export async function GET(request: NextRequest) {
               }
             },
             orderBy: { createdAt: 'asc' }
-          },
-          tasks: {
-            where: { checklistItemId: null }, // Tasks not associated with checklist items
-            orderBy: { createdAt: 'asc' }
           }
         }
       });
 
       // If current month doesn't exist, get the most recent or create current month
       if (!targetMonth) {
-        targetMonth = await prisma.monthClose.findFirst({
-          where: { userId: user.id },
+        targetMonth = await db.monthClose.findFirst({
+          where: { entityId },
           include: {
             checklistItems: {
               include: {
@@ -75,10 +76,6 @@ export async function GET(request: NextRequest) {
                   orderBy: { createdAt: 'asc' }
                 }
               },
-              orderBy: { createdAt: 'asc' }
-            },
-            tasks: {
-              where: { checklistItemId: null }, // Tasks not associated with checklist items
               orderBy: { createdAt: 'asc' }
             }
           },
@@ -96,9 +93,9 @@ export async function GET(request: NextRequest) {
           endDate.setDate(0);
           endDate.setHours(23, 59, 59, 999);
 
-          targetMonth = await prisma.monthClose.create({
+          targetMonth = await db.monthClose.create({
             data: {
-              userId: user.id,
+              entityId,
               label: currentMonth,
               startDate,
               endDate
@@ -111,10 +108,6 @@ export async function GET(request: NextRequest) {
                   }
                 },
                 orderBy: { createdAt: 'asc' }
-              },
-              tasks: {
-                where: { checklistItemId: null },
-                orderBy: { createdAt: 'asc' }
               }
             }
           });
@@ -123,8 +116,8 @@ export async function GET(request: NextRequest) {
     }
 
     // Get all available months for the selector
-    const availableMonths = await prisma.monthClose.findMany({
-      where: { userId: user.id },
+    const availableMonths = await db.monthClose.findMany({
+      where: { entityId },
       select: { label: true },
       orderBy: { label: 'desc' }
     });
@@ -145,10 +138,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Calculate summary statistics
-    const allTasks = [
-      ...targetMonth.tasks,
-      ...targetMonth.checklistItems.flatMap(item => item.tasks)
-    ];
+    const allTasks = targetMonth.checklistItems.flatMap(item => item.tasks);
     
     const totalTasks = allTasks.length;
     const completedTasks = allTasks.filter(task => task.status === 'DONE').length;
@@ -181,18 +171,7 @@ export async function GET(request: NextRequest) {
       };
     });
 
-    // Add standalone tasks as checklist items
-    const standaloneTasks = targetMonth.tasks.map(task => ({
-      id: task.id,
-      title: task.title,
-      assignee: task.assignee,
-      dueDate: task.dueDate,
-      status: task.status,
-      tasks: [task],
-      isComplete: task.status === 'DONE'
-    }));
-
-    const allChecklistItems = [...checklistItems, ...standaloneTasks];
+    const allChecklistItems = checklistItems;
 
     const summary = {
       totalTasks,

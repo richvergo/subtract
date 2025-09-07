@@ -10,6 +10,7 @@ import {
   LogOut,
   Home
 } from 'lucide-react';
+import EntitySwitcher from './EntitySwitcher';
 
 const navigation = [
   {
@@ -56,6 +57,11 @@ export default function Sidebar() {
           </div>
           <span className="text-xl font-semibold text-gray-900">LOGO</span>
         </Link>
+      </div>
+
+      {/* Entity Switcher */}
+      <div className="border-b border-gray-100">
+        <EntitySwitcher />
       </div>
 
       {/* Navigation Section */}
