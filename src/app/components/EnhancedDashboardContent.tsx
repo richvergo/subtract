@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import StatusBadge from './StatusBadge';
 import StatusSelect from './StatusSelect';
@@ -46,6 +46,13 @@ interface DashboardData {
   availableMonths: string[];
 }
 
+interface TeamMember {
+  id: string;
+  email: string;
+  name: string;
+  role: string;
+}
+
 interface DashboardContentProps {
   initialData: DashboardData;
 }
@@ -57,11 +64,41 @@ export default function EnhancedDashboardContent({ initialData }: DashboardConte
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
   const [editingItem, setEditingItem] = useState<string | null>(null);
   const [editingTask, setEditingTask] = useState<string | null>(null);
+  const [editingItemData, setEditingItemData] = useState<{
+    title: string;
+    assignee: string;
+    dueDate: string;
+    status: string;
+  }>({ title: '', assignee: '', dueDate: '', status: 'NOT_STARTED' });
   const [showAddForm, setShowAddForm] = useState(false);
   const [newItemTitle, setNewItemTitle] = useState('');
   const [newItemAssignee, setNewItemAssignee] = useState('');
   const [newItemDueDate, setNewItemDueDate] = useState('');
+  const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
+  const [loadingTeamMembers, setLoadingTeamMembers] = useState(false);
   const router = useRouter();
+
+  // Fetch team members when component loads
+  useEffect(() => {
+    fetchTeamMembers();
+  }, []);
+
+  const fetchTeamMembers = async () => {
+    setLoadingTeamMembers(true);
+    try {
+      const response = await fetch('/api/team-members');
+      if (!response.ok) {
+        throw new Error('Failed to fetch team members');
+      }
+      const teamData = await response.json();
+      setTeamMembers(teamData.teamMembers);
+    } catch (error) {
+      console.error('Error fetching team members:', error);
+      alert('Failed to load team members. Please try again.');
+    } finally {
+      setLoadingTeamMembers(false);
+    }
+  };
 
   const fetchMonthData = async (monthLabel: string) => {
     setLoading(true);
@@ -109,6 +146,12 @@ export default function EnhancedDashboardContent({ initialData }: DashboardConte
     return new Date(dueDate) < today;
   };
 
+  const getTeamMemberName = (assigneeId: string | null) => {
+    if (!assigneeId) return 'Unassigned';
+    const member = teamMembers.find(m => m.id === assigneeId);
+    return member ? member.name : 'Unknown';
+  };
+
 
   const createChecklistItem = async () => {
     if (!newItemTitle.trim() || !data.month) return;
@@ -140,6 +183,74 @@ export default function EnhancedDashboardContent({ initialData }: DashboardConte
     } catch (error) {
       console.error('Error creating checklist item:', error);
       alert('Failed to create checklist item. Please try again.');
+    }
+  };
+
+  const startEditingItem = (item: ChecklistItem) => {
+    setEditingItem(item.id);
+    setEditingItemData({
+      title: item.title,
+      assignee: item.assignee || '',
+      dueDate: item.dueDate ? new Date(item.dueDate).toISOString().split('T')[0] : '',
+      status: item.status
+    });
+  };
+
+  const cancelEditingItem = () => {
+    setEditingItem(null);
+    setEditingItemData({ title: '', assignee: '', dueDate: '', status: 'NOT_STARTED' });
+  };
+
+  const saveEditingItem = async () => {
+    if (!editingItem) return;
+
+    try {
+      const response = await fetch(`/api/checklist/${editingItem}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: editingItemData.title,
+          assignee: editingItemData.assignee || null,
+          dueDate: editingItemData.dueDate || null,
+          status: editingItemData.status
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to update checklist item');
+      }
+
+      // Refresh data
+      await fetchMonthData(selectedMonth);
+      setEditingItem(null);
+      setEditingItemData({ title: '', assignee: '', dueDate: '', status: 'NOT_STARTED' });
+    } catch (error) {
+      console.error('Error updating checklist item:', error);
+      alert('Failed to update checklist item. Please try again.');
+    }
+  };
+
+  const quickStatusChange = async (itemId: string, newStatus: string) => {
+    try {
+      const response = await fetch(`/api/checklist/${itemId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          status: newStatus
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to update status');
+      }
+
+      // Refresh data
+      await fetchMonthData(selectedMonth);
+    } catch (error) {
+      console.error('Error updating status:', error);
+      alert('Failed to update status. Please try again.');
     }
   };
 
@@ -350,13 +461,19 @@ export default function EnhancedDashboardContent({ initialData }: DashboardConte
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Assignee</label>
-              <input
-                type="text"
+              <select
                 value={newItemAssignee}
                 onChange={(e) => setNewItemAssignee(e.target.value)}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                placeholder="Enter assignee name"
-              />
+                disabled={loadingTeamMembers}
+              >
+                <option value="">Select team member...</option>
+                {teamMembers.map((member) => (
+                  <option key={member.id} value={member.id}>
+                    {member.name} ({member.role})
+                  </option>
+                ))}
+              </select>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Due Date</label>
@@ -455,37 +572,117 @@ export default function EnhancedDashboardContent({ initialData }: DashboardConte
                               <div className="h-4 w-4 border-2 border-gray-300 rounded-full"></div>
                             )}
                           </div>
-                          <div className="text-sm font-medium text-gray-900">{item.title}</div>
+                          {editingItem === item.id ? (
+                            <input
+                              type="text"
+                              value={editingItemData.title}
+                              onChange={(e) => setEditingItemData(prev => ({ ...prev, title: e.target.value }))}
+                              className="text-sm font-medium text-gray-900 border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                            />
+                          ) : (
+                            <div className="text-sm font-medium text-gray-900">{item.title}</div>
+                          )}
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {item.assignee || 'Unassigned'}
+                        {editingItem === item.id ? (
+                          <select
+                            value={editingItemData.assignee}
+                            onChange={(e) => setEditingItemData(prev => ({ ...prev, assignee: e.target.value }))}
+                            className="border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                          >
+                            <option value="">Unassigned</option>
+                            {teamMembers.map((member) => (
+                              <option key={member.id} value={member.id}>
+                                {member.name} ({member.role})
+                              </option>
+                            ))}
+                          </select>
+                        ) : (
+                          getTeamMemberName(item.assignee)
+                        )}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        <span className={isOverdue(item.dueDate, item.status) ? 'text-red-600 font-medium' : ''}>
-                          {formatDate(item.dueDate)}
-                        </span>
+                        {editingItem === item.id ? (
+                          <input
+                            type="date"
+                            value={editingItemData.dueDate}
+                            onChange={(e) => setEditingItemData(prev => ({ ...prev, dueDate: e.target.value }))}
+                            className="border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                          />
+                        ) : (
+                          <span className={isOverdue(item.dueDate, item.status) ? 'text-red-600 font-medium' : ''}>
+                            {formatDate(item.dueDate)}
+                          </span>
+                        )}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <StatusBadge status={item.status} />
+                        {editingItem === item.id ? (
+                          <select
+                            value={editingItemData.status}
+                            onChange={(e) => setEditingItemData(prev => ({ ...prev, status: e.target.value }))}
+                            className="border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                          >
+                            <option value="NOT_STARTED">Not Started</option>
+                            <option value="IN_PROGRESS">In Progress</option>
+                            <option value="DONE">Done</option>
+                          </select>
+                        ) : (
+                          <StatusBadge status={item.status} />
+                        )}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                         {item.tasks.length} task{item.tasks.length !== 1 ? 's' : ''}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                         <div className="flex gap-2">
-                          <button
-                            onClick={() => toggleItemExpansion(item.id)}
-                            className="text-blue-600 hover:text-blue-900"
-                          >
-                            {expandedItems.has(item.id) ? 'Hide' : 'Show'}
-                          </button>
-                          <button
-                            onClick={() => deleteChecklistItem(item.id)}
-                            className="text-red-600 hover:text-red-900"
-                          >
-                            Delete
-                          </button>
+                          {editingItem === item.id ? (
+                            <>
+                              <button
+                                onClick={saveEditingItem}
+                                className="text-green-600 hover:text-green-900"
+                              >
+                                Save
+                              </button>
+                              <button
+                                onClick={cancelEditingItem}
+                                className="text-gray-600 hover:text-gray-900"
+                              >
+                                Cancel
+                              </button>
+                            </>
+                          ) : (
+                            <>
+                              <button
+                                onClick={() => toggleItemExpansion(item.id)}
+                                className="text-blue-600 hover:text-blue-900"
+                              >
+                                {expandedItems.has(item.id) ? 'Hide' : 'Show'}
+                              </button>
+                              <select
+                                value={item.status}
+                                onChange={(e) => quickStatusChange(item.id, e.target.value)}
+                                className="text-sm border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <option value="NOT_STARTED">Not Started</option>
+                                <option value="IN_PROGRESS">In Progress</option>
+                                <option value="DONE">Done</option>
+                              </select>
+                              <button
+                                onClick={() => startEditingItem(item)}
+                                className="text-yellow-600 hover:text-yellow-900"
+                              >
+                                Edit
+                              </button>
+                              <button
+                                onClick={() => deleteChecklistItem(item.id)}
+                                className="text-red-600 hover:text-red-900"
+                              >
+                                Delete
+                              </button>
+                            </>
+                          )}
                         </div>
                       </td>
                     </tr>

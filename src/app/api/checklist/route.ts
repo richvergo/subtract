@@ -20,11 +20,34 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { title, assignee, dueDate, monthId } = CreateChecklistItemSchema.parse(body);
 
-    // Verify the month belongs to the current user
+    // Find current user with memberships
+    const user = await db.user.findUnique({
+      where: { email: session.user.email },
+      include: {
+        memberships: {
+          include: {
+            entity: true
+          }
+        }
+      }
+    });
+
+    if (!user) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    }
+
+    // Get the active entity from session or use the first one
+    const activeEntityId = session.user.activeEntityId || user.memberships[0]?.entityId;
+    
+    if (!activeEntityId) {
+      return NextResponse.json({ error: 'No active entity' }, { status: 400 });
+    }
+
+    // Verify the month belongs to the current entity
     const month = await db.monthClose.findFirst({
       where: {
         id: monthId,
-        user: { email: session.user.email }
+        entityId: activeEntityId
       }
     });
 

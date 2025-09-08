@@ -40,10 +40,8 @@ export async function GET(request: NextRequest) {
           checklistItems: {
             include: {
               tasks: {
-                orderBy: { createdAt: 'asc' }
               }
             },
-            orderBy: { createdAt: 'asc' }
           }
         }
       });
@@ -57,10 +55,8 @@ export async function GET(request: NextRequest) {
           checklistItems: {
             include: {
               tasks: {
-                orderBy: { createdAt: 'asc' }
               }
             },
-            orderBy: { createdAt: 'asc' }
           }
         }
       });
@@ -73,10 +69,8 @@ export async function GET(request: NextRequest) {
             checklistItems: {
               include: {
                 tasks: {
-                  orderBy: { createdAt: 'asc' }
                 }
               },
-              orderBy: { createdAt: 'asc' }
             }
           },
           orderBy: { label: 'desc' }
@@ -104,10 +98,8 @@ export async function GET(request: NextRequest) {
               checklistItems: {
                 include: {
                   tasks: {
-                    orderBy: { createdAt: 'asc' }
                   }
                 },
-                orderBy: { createdAt: 'asc' }
               }
             }
           });
