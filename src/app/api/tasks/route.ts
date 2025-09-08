@@ -1,8 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/db';
+import { db } from '@/lib/db';
+import { getSession } from '@/lib/auth';
 
 export async function GET(request: NextRequest) {
   try {
+    const session = await getSession();
+    if (!session?.user?.email) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const { searchParams } = new URL(request.url);
     const monthId = searchParams.get('monthId');
 
@@ -13,7 +19,19 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const tasks = await prisma.task.findMany({
+    // Verify the month belongs to the current user
+    const month = await db.monthClose.findFirst({
+      where: {
+        id: monthId,
+        user: { email: session.user.email }
+      }
+    });
+
+    if (!month) {
+      return NextResponse.json({ error: 'Month not found' }, { status: 404 });
+    }
+
+    const tasks = await db.task.findMany({
       where: { monthId },
       orderBy: { createdAt: 'desc' },
     });
@@ -30,6 +48,11 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const session = await getSession();
+    if (!session?.user?.email) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const body = await request.json();
     const { monthId, title, assignee, dueDate, notes } = body;
 
@@ -40,7 +63,19 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const task = await prisma.task.create({
+    // Verify the month belongs to the current user
+    const month = await db.monthClose.findFirst({
+      where: {
+        id: monthId,
+        user: { email: session.user.email }
+      }
+    });
+
+    if (!month) {
+      return NextResponse.json({ error: 'Month not found' }, { status: 404 });
+    }
+
+    const task = await db.task.create({
       data: {
         monthId,
         title,

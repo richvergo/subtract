@@ -1,9 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/db';
+import { db } from '@/lib/db';
+import { getSession } from '@/lib/auth';
 
 export async function GET() {
   try {
-    const users = await prisma.user.findMany({
+    const session = await getSession();
+    if (!session?.user?.email) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const users = await db.user.findMany({
       select: {
         id: true,
         email: true,
@@ -24,6 +30,11 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
+    const session = await getSession();
+    if (!session?.user?.email) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const body = await request.json();
     const { email, passwordHash, name } = body;
 
@@ -34,7 +45,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const user = await prisma.user.create({
+    const user = await db.user.create({
       data: {
         email,
         passwordHash,

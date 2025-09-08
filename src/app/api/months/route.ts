@@ -1,20 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/db';
+import { db } from '@/lib/db';
+import { getSession } from '@/lib/auth';
 
 export async function GET(request: NextRequest) {
   try {
-    const { searchParams } = new URL(request.url);
-    const userId = searchParams.get('userId');
-
-    if (!userId) {
-      return NextResponse.json(
-        { error: 'userId is required' },
-        { status: 400 }
-      );
+    const session = await getSession();
+    if (!session?.user?.email) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const months = await prisma.monthClose.findMany({
-      where: { userId },
+    // Find current user
+    const user = await db.user.findUnique({
+      where: { email: session.user.email },
+    });
+
+    if (!user) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    }
+
+    const months = await db.monthClose.findMany({
+      where: { userId: user.id },
       include: {
         tasks: {
           select: {
@@ -42,19 +47,33 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
-    const { userId, label, startDate, endDate } = body;
+    const session = await getSession();
+    if (!session?.user?.email) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
 
-    if (!userId || !label || !startDate || !endDate) {
+    // Find current user
+    const user = await db.user.findUnique({
+      where: { email: session.user.email },
+    });
+
+    if (!user) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    }
+
+    const body = await request.json();
+    const { label, startDate, endDate } = body;
+
+    if (!label || !startDate || !endDate) {
       return NextResponse.json(
-        { error: 'userId, label, startDate, and endDate are required' },
+        { error: 'label, startDate, and endDate are required' },
         { status: 400 }
       );
     }
 
-    const month = await prisma.monthClose.create({
+    const month = await db.monthClose.create({
       data: {
-        userId,
+        userId: user.id,
         label,
         startDate: new Date(startDate),
         endDate: new Date(endDate),

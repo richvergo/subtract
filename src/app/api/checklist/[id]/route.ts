@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/db';
+import { db } from '@/lib/db';
 import { getSession } from '@/lib/auth';
 import { z } from 'zod';
 
@@ -25,7 +25,7 @@ export async function PATCH(
     const updateData = UpdateChecklistItemSchema.parse(body);
 
     // Verify the checklist item belongs to the current user
-    const existingItem = await prisma.checklistItem.findFirst({
+    const existingItem = await db.checklistItem.findFirst({
       where: {
         id,
         month: {
@@ -45,7 +45,7 @@ export async function PATCH(
     }
 
     // Update the checklist item
-    const updatedItem = await prisma.checklistItem.update({
+    const updatedItem = await db.checklistItem.update({
       where: { id },
       data: dataToUpdate,
     });
@@ -73,7 +73,7 @@ export async function DELETE(
     const { id } = await params;
 
     // Verify the checklist item belongs to the current user
-    const existingItem = await prisma.checklistItem.findFirst({
+    const existingItem = await db.checklistItem.findFirst({
       where: {
         id,
         month: {
@@ -87,12 +87,12 @@ export async function DELETE(
     }
 
     // Delete associated tasks first
-    await prisma.task.deleteMany({
+    await db.task.deleteMany({
       where: { checklistItemId: id }
     });
 
     // Delete the checklist item
-    await prisma.checklistItem.delete({
+    await db.checklistItem.delete({
       where: { id }
     });
 

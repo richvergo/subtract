@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/db';
+import { db } from '@/lib/db';
 import { getSession } from '@/lib/auth';
 import { z } from 'zod';
 
@@ -21,7 +21,7 @@ export async function POST(request: NextRequest) {
     const { title, assignee, dueDate, monthId } = CreateChecklistItemSchema.parse(body);
 
     // Verify the month belongs to the current user
-    const month = await prisma.monthClose.findFirst({
+    const month = await db.monthClose.findFirst({
       where: {
         id: monthId,
         user: { email: session.user.email }
@@ -33,7 +33,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Create the checklist item
-    const checklistItem = await prisma.checklistItem.create({
+    const checklistItem = await db.checklistItem.create({
       data: {
         title,
         assignee,

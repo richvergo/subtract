@@ -1,21 +1,45 @@
 import { Suspense } from 'react';
 import { getSession } from '@/lib/auth';
-import { prisma } from '@/lib/db';
+import { db } from '@/lib/db';
 import EnhancedDashboardContent from '@/app/components/EnhancedDashboardContent';
 import { redirect } from 'next/navigation';
 
 async function getDashboardData(monthLabel?: string) {
   const session = await getSession();
-  if (!session?.user?.email) {
+  
+  // Log warning if no session
+  if (!session) {
+    console.warn('No session found, redirecting to register');
+    redirect('/register');
+  }
+  
+  if (!session.user?.email) {
+    console.warn('Session exists but no user email found, redirecting to register');
     redirect('/register');
   }
 
-  // Find current user
-  const user = await prisma.user.findUnique({
+  // Find current user with memberships
+  const user = await db.user.findUnique({
     where: { email: session.user.email },
+    include: {
+      memberships: {
+        include: {
+          entity: true
+        }
+      }
+    }
   });
 
   if (!user) {
+    console.warn(`User not found for email: ${session.user.email}, redirecting to register`);
+    redirect('/register');
+  }
+
+  // Get the active entity from session or use the first one
+  const activeEntityId = session.user.activeEntityId || user.memberships[0]?.entityId;
+  
+  if (!activeEntityId) {
+    console.warn(`No active entity found for user: ${session.user.email}, redirecting to register`);
     redirect('/register');
   }
 
@@ -23,62 +47,42 @@ async function getDashboardData(monthLabel?: string) {
   let targetMonth;
   if (monthLabel) {
     // Load specific month
-    targetMonth = await prisma.monthClose.findUnique({
-      where: { userId_label: { userId: user.id, label: monthLabel } },
+    targetMonth = await db.monthClose.findUnique({
+      where: { entityId_label: { entityId: activeEntityId, label: monthLabel } },
       include: {
         checklistItems: {
           include: {
-            tasks: {
-              orderBy: { createdAt: 'asc' }
-            }
+            tasks: true
           },
-          orderBy: { createdAt: 'asc' }
         },
-        tasks: {
-          where: { checklistItemId: null }, // Tasks not associated with checklist items
-          orderBy: { createdAt: 'asc' }
-        }
       }
     });
   } else {
     // Load current month or most recent
     const currentMonth = new Date().toISOString().slice(0, 7); // YYYY-MM format
     
-    targetMonth = await prisma.monthClose.findUnique({
-      where: { userId_label: { userId: user.id, label: currentMonth } },
+    targetMonth = await db.monthClose.findUnique({
+      where: { entityId_label: { entityId: activeEntityId, label: currentMonth } },
       include: {
         checklistItems: {
           include: {
-            tasks: {
-              orderBy: { createdAt: 'asc' }
-            }
+            tasks: true
           },
-          orderBy: { createdAt: 'asc' }
         },
-        tasks: {
-          where: { checklistItemId: null }, // Tasks not associated with checklist items
-          orderBy: { createdAt: 'asc' }
-        }
       }
     });
 
     // If current month doesn't exist, get the most recent or create current month
     if (!targetMonth) {
-      targetMonth = await prisma.monthClose.findFirst({
-        where: { userId: user.id },
+      targetMonth = await db.monthClose.findFirst({
+        where: { entityId: activeEntityId },
         include: {
           checklistItems: {
             include: {
               tasks: {
-                orderBy: { createdAt: 'asc' }
               }
             },
-            orderBy: { createdAt: 'asc' }
           },
-          tasks: {
-            where: { checklistItemId: null }, // Tasks not associated with checklist items
-            orderBy: { createdAt: 'asc' }
-          }
         },
         orderBy: { label: 'desc' }
       });
@@ -94,9 +98,9 @@ async function getDashboardData(monthLabel?: string) {
         endDate.setDate(0);
         endDate.setHours(23, 59, 59, 999);
 
-        targetMonth = await prisma.monthClose.create({
+        targetMonth = await db.monthClose.create({
           data: {
-            userId: user.id,
+            entityId: activeEntityId,
             label: currentMonth,
             startDate,
             endDate
@@ -105,15 +109,9 @@ async function getDashboardData(monthLabel?: string) {
             checklistItems: {
               include: {
                 tasks: {
-                  orderBy: { createdAt: 'asc' }
                 }
               },
-              orderBy: { createdAt: 'asc' }
             },
-            tasks: {
-              where: { checklistItemId: null },
-              orderBy: { createdAt: 'asc' }
-            }
           }
         });
       }
@@ -121,8 +119,8 @@ async function getDashboardData(monthLabel?: string) {
   }
 
   // Get all available months for the selector
-  const availableMonths = await prisma.monthClose.findMany({
-    where: { userId: user.id },
+  const availableMonths = await db.monthClose.findMany({
+    where: { entityId: activeEntityId },
     select: { label: true },
     orderBy: { label: 'desc' }
   });
@@ -143,19 +141,16 @@ async function getDashboardData(monthLabel?: string) {
   }
 
   // Calculate summary statistics
-  const allTasks = [
-    ...targetMonth.tasks,
-    ...targetMonth.checklistItems.flatMap(item => item.tasks)
-  ];
+  const allTasks = targetMonth.checklistItems.flatMap((item: any) => item.tasks);
   
   const totalTasks = allTasks.length;
-  const completedTasks = allTasks.filter(task => task.status === 'DONE').length;
+  const completedTasks = allTasks.filter((task: any) => task.status === 'DONE').length;
   const remainingTasks = totalTasks - completedTasks;
   
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   
-  const overdueTasks = allTasks.filter(task => 
+  const overdueTasks = allTasks.filter((task: any) => 
     task.dueDate && 
     task.dueDate < today && 
     task.status !== 'DONE'
@@ -164,9 +159,9 @@ async function getDashboardData(monthLabel?: string) {
   const completionPercentage = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
 
   // Process checklist items
-  const checklistItems = targetMonth.checklistItems.map(item => {
+  const checklistItems = targetMonth.checklistItems.map((item: any) => {
     // A checklist item is complete only if ALL its tasks are DONE
-    const isComplete = item.tasks.length > 0 ? item.tasks.every(task => task.status === 'DONE') : item.status === 'DONE';
+    const isComplete = item.tasks.length > 0 ? item.tasks.every((task: any) => task.status === 'DONE') : item.status === 'DONE';
     
     return {
       id: item.id,
@@ -174,33 +169,15 @@ async function getDashboardData(monthLabel?: string) {
       assignee: item.assignee,
       dueDate: item.dueDate?.toISOString() || null,
       status: item.status,
-      tasks: item.tasks.map(task => ({
+      tasks: item.tasks.map((task: any) => ({
         ...task,
-        dueDate: task.dueDate?.toISOString() || null,
-        createdAt: task.createdAt.toISOString(),
-        updatedAt: task.updatedAt.toISOString()
+        dueDate: task.dueDate?.toISOString() || null
       })),
       isComplete
     };
   });
 
-  // Add standalone tasks as checklist items
-  const standaloneTasks = targetMonth.tasks.map(task => ({
-    id: task.id,
-    title: task.title,
-    assignee: task.assignee,
-    dueDate: task.dueDate?.toISOString() || null,
-    status: task.status,
-    tasks: [{
-      ...task,
-      dueDate: task.dueDate?.toISOString() || null,
-      createdAt: task.createdAt.toISOString(),
-      updatedAt: task.updatedAt.toISOString()
-    }],
-    isComplete: task.status === 'DONE'
-  }));
-
-  const allChecklistItems = [...checklistItems, ...standaloneTasks];
+  const allChecklistItems = checklistItems;
 
   const summary = {
     totalTasks,

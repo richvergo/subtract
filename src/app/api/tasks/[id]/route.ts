@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/db';
+import { db } from '@/lib/db';
 import { getSession } from '@/lib/auth';
 import { z } from 'zod';
 
@@ -26,7 +26,7 @@ export async function PATCH(
     const updateData = UpdateTaskSchema.parse(body);
 
     // Verify the task belongs to the current user
-    const existingTask = await prisma.task.findFirst({
+    const existingTask = await db.task.findFirst({
       where: {
         id,
         month: {
@@ -45,7 +45,7 @@ export async function PATCH(
       dataToUpdate.dueDate = new Date(updateData.dueDate);
     }
 
-    const updatedTask = await prisma.task.update({
+    const updatedTask = await db.task.update({
       where: { id },
       data: dataToUpdate,
     });
@@ -73,7 +73,7 @@ export async function DELETE(
     const { id } = await params;
 
     // Verify the task belongs to the current user
-    const existingTask = await prisma.task.findFirst({
+    const existingTask = await db.task.findFirst({
       where: {
         id,
         month: {
@@ -86,7 +86,7 @@ export async function DELETE(
       return NextResponse.json({ error: 'Task not found' }, { status: 404 });
     }
 
-    await prisma.task.delete({
+    await db.task.delete({
       where: { id },
     });
 

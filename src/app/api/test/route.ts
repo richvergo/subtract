@@ -1,10 +1,10 @@
 import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/db';
+import { db } from '@/lib/db';
 
 export async function GET() {
   try {
-    // Test if prisma.task exists
-    const tasks = await prisma.task.findMany({
+    // Test if db.task exists
+    const tasks = await db.task.findMany({
       take: 1
     });
     
