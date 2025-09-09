@@ -47,6 +47,8 @@
 - **Checklist CRUD (Entity-Scoped)**  
   - Create, read, update, delete checklist items within entity.  
   - Create, read, update, delete tasks within checklist items.  
+  - Admin can edit checklist items (title, assignee, due date, status).  
+  - Quick status changes for checklist items and tasks.  
   - Data isolation between entities.  
 
 - **Dashboard API (Entity-Scoped)**  
@@ -57,11 +59,18 @@
 - **Month management (Entity-Scoped)**  
   - `POST /api/months` → creates month if missing for entity.  
   - `GET /api/months/:id/checklist` → only returns entity's items.  
+  - `POST /api/months/generate` → ensures all 12 months exist for current year.  
+  - `POST /api/months/copy` → copies checklist items and tasks from previous month.  
 
 - **Clone month (Entity-Scoped)**  
   - Copies checklist + tasks within same entity.  
   - Resets statuses to OPEN.  
   - Rolls due dates forward.  
+
+- **Team Management (Entity-Scoped)**  
+  - `GET /api/team-members` → returns team members for active entity.  
+  - Role-based ordering (ADMIN, MANAGER, EMPLOYEE).  
+  - Used for assignee dropdowns in forms.
 
 - **Export CSV (Entity-Scoped)**  
   - Includes both checklist items and tasks for active entity.  
@@ -76,12 +85,16 @@
 2. Login → system shows no entities message.  
 3. Create first entity (Admin only).  
 4. System auto-creates current month for entity.  
-5. Add first checklist item manually.  
-6. Add tasks to the checklist item.  
+5. Add first checklist item manually with assignee from team dropdown.  
+6. Add tasks to the checklist item with individual assignees.  
 7. Mark all but one task DONE → checklist item remains IN_PROGRESS.  
 8. Mark last task DONE → checklist item moves to DONE.  
-9. Update assignees and due dates.  
-10. Dashboard reflects progress correctly.  
+9. Edit checklist item (title, assignee, due date, status).  
+10. Use quick status changes for tasks.  
+11. Navigate between months using month dropdown.  
+12. System auto-generates all 12 months for current year.  
+13. Copy checklist items from previous month to future months.  
+14. Dashboard reflects progress correctly.  
 
 **User Invitation Flow**  
 1. Admin creates entity.  
@@ -103,11 +116,19 @@
 3. Employee can only see tasks assigned to them.  
 4. Unauthorized access attempts are blocked.  
 
+**Month Navigation Flow**  
+1. User can switch between months using dropdown in page title.  
+2. Page title shows current month name (e.g., "September 2025").  
+3. System automatically creates all 12 months for current year.  
+4. Future months can copy checklist items from previous month.  
+5. Month dropdown shows all available months for entity.
+
 **Other Flows**  
 - First-time user with no entities sees contact admin message.  
 - Returning user lands on current month with existing data for active entity.  
 - Cross-entity access attempts are blocked.  
 - Entity switcher shows correct roles and permissions.  
+- Team member dropdowns show users from active entity only.  
 
 ---
 

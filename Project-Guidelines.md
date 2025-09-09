@@ -41,6 +41,8 @@
   /checklist # Checklist management (entity-scoped)
   /dashboard # Dashboard data (entity-scoped)
   /tasks # Task management (entity-scoped)
+  /team-members # Team member listing (entity-scoped)
+  /months # Month management (generate, copy)
 /register # Registration page
 /page.tsx # Dashboard (home) with entity switcher
 /layout.tsx # Root layout with sidebar
@@ -48,7 +50,7 @@
   Sidebar.tsx # Navigation with entity switcher
   EntitySwitcher.tsx # Entity selection dropdown
   LayoutWithSidebar.tsx # Layout wrapper
-  EnhancedDashboardContent.tsx # Dashboard with CRUD
+  EnhancedDashboardContent.tsx # Dashboard with CRUD, month navigation, team management
   StatusBadge.tsx # Status indicators
   StatusSelect.tsx # Status dropdowns
   Providers.tsx # NextAuth session provider
@@ -119,12 +121,19 @@ permissions.ts # RBAC middleware and helpers
 - **Integration tests:**
   - API endpoints handle happy-path + failure cases.
   - Manual checklist creation and task management.
+  - Checklist item editing (title, assignee, due date, status).
+  - Task creation and management with individual assignees.
+  - Month generation and copying functionality.
+  - Team member listing and role-based ordering.
   - Cloning rolls due dates and resets statuses.
   - Entity creation and user invitation flows.
   - Role-based access control enforcement.
 
 - **E2E tests (Playwright):**
   - Golden path: register → login → auto-create month → add checklist item → add tasks → update statuses → assign users → dashboard reflects progress.
+  - Month navigation: switch between months, verify month title display, test month generation.
+  - Checklist editing: edit checklist items, test quick status changes, verify team member dropdowns.
+  - Task management: create tasks with assignees, edit task status, delete tasks.
   - Multi-entity path: create entity → invite users → switch entities → verify data isolation.
   - Role-based path: test ADMIN/MANAGER/EMPLOYEE permissions.
   - Negative tests: invalid login, unauthorized access, cross-entity access attempts.

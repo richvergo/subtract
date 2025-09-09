@@ -33,6 +33,8 @@
    - **Backwards** → view previous months for the same entity.  
    - **Forwards** → create/copy future months for the same entity.  
    - **Entity Switcher** → switch between entities they belong to
+3. System automatically ensures all 12 months exist for the current year.
+4. Future months automatically copy checklist items from the previous month if empty.
 
 #### Checklist vs. Tasks Hierarchy
 - **Checklist Item** = Top-level close process step (e.g. *Credit Card Reconciliation*, *AP Review*).  
@@ -51,14 +53,17 @@
 When user logs in:  
 - **Entity Switcher** in sidebar shows available entities and user's role
 - **Current month's checklist** for active entity is displayed.  
-- Table view: `Item, Due Date, Owner, Status`.  
+- **Month Navigation**: Page title shows current month (e.g., "September 2025") with dropdown to switch months.
+- Table view: `Item, Assignee, Due Date, Status, Actions`.  
 - Each checklist item can expand to show its **tasks**.  
 - Progress metrics: % complete, # overdue, # tasks remaining.  
-- **Month selector (top bar)** controls which month is displayed for the active entity.  
+- **Team Member Dropdowns**: Assignee fields show team members from active entity.
 - Actions:  
-  - `Add Checklist Item`.  
-  - `Add Task` (within a checklist item).  
-  - `Edit/Delete` checklist items and tasks.  
+  - `Add Checklist Item` with assignee selection.  
+  - `Add Task` (within a checklist item) with individual assignee.  
+  - `Edit` checklist items (title, assignee, due date, status).  
+  - `Quick Status Change` dropdowns for checklist items and tasks.  
+  - `Delete` tasks.  
   - `Clone Previous Month`.  
   - `Export CSV`.  
 
@@ -103,13 +108,19 @@ When user logs in:
 6. User can update task status (`NOT_STARTED`, `IN_PROGRESS`, `DONE`).  
 7. Checklist item automatically moves to `DONE` only if all tasks are done.  
 8. Progress bar updates correctly at both checklist + task level.  
-9. User can navigate between months within the same entity.  
-10. "Clone previous month" creates a new checklist with rolled dates for the same entity.  
-11. Export CSV includes checklist items and tasks with status for the active entity.  
-12. **Multi-Entity Security**: Users only see data for entities they belong to.  
-13. **Role-Based Access**: Employees only see tasks assigned to them.  
-14. **Entity Management**: Admins can create entities and invite users.  
-15. **Entity Switching**: Users can switch between entities they belong to.  
+9. User can navigate between months within the same entity using month dropdown.  
+10. Page title displays current month name (e.g., "September 2025").  
+11. System automatically creates all 12 months for current year.  
+12. Future months automatically copy checklist items from previous month if empty.  
+13. Admins can edit checklist items (title, assignee, due date, status).  
+14. Quick status change dropdowns for both checklist items and tasks.  
+15. Team member dropdowns show users from active entity only.  
+16. "Clone previous month" creates a new checklist with rolled dates for the same entity.  
+17. Export CSV includes checklist items and tasks with status for the active entity.  
+18. **Multi-Entity Security**: Users only see data for entities they belong to.  
+19. **Role-Based Access**: Employees only see tasks assigned to them.  
+20. **Entity Management**: Admins can create entities and invite users.  
+21. **Entity Switching**: Users can switch between entities they belong to.  
 
 ---
 

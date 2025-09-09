@@ -64,6 +64,11 @@ export default function EnhancedDashboardContent({ initialData }: DashboardConte
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
   const [editingItem, setEditingItem] = useState<string | null>(null);
   const [editingTask, setEditingTask] = useState<string | null>(null);
+  const [showAddTaskForm, setShowAddTaskForm] = useState<string | null>(null);
+  const [newTaskTitle, setNewTaskTitle] = useState('');
+  const [newTaskAssignee, setNewTaskAssignee] = useState('');
+  const [newTaskDueDate, setNewTaskDueDate] = useState('');
+  const [newTaskNotes, setNewTaskNotes] = useState('');
   const [editingItemData, setEditingItemData] = useState<{
     title: string;
     assignee: string;
@@ -78,10 +83,42 @@ export default function EnhancedDashboardContent({ initialData }: DashboardConte
   const [loadingTeamMembers, setLoadingTeamMembers] = useState(false);
   const router = useRouter();
 
-  // Fetch team members when component loads
+  // Fetch team members and ensure all months exist when component loads
   useEffect(() => {
     fetchTeamMembers();
+    ensureAllMonthsExist();
   }, []);
+
+  const refreshAvailableMonths = async () => {
+    try {
+      // Fetch current month data to get updated available months
+      const response = await fetch(`/api/dashboard?month=${encodeURIComponent(selectedMonth)}`);
+      if (response.ok) {
+        const monthData = await response.json();
+        setData(prevData => ({
+          ...prevData,
+          availableMonths: monthData.availableMonths
+        }));
+      }
+    } catch (error) {
+      console.error('Error refreshing available months:', error);
+    }
+  };
+
+  const ensureAllMonthsExist = async () => {
+    try {
+      await fetch('/api/months/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      // Small delay to ensure months are created before refreshing
+      setTimeout(() => {
+        refreshAvailableMonths();
+      }, 500);
+    } catch (error) {
+      console.error('Error ensuring months exist:', error);
+    }
+  };
 
   const fetchTeamMembers = async () => {
     setLoadingTeamMembers(true);
@@ -150,6 +187,12 @@ export default function EnhancedDashboardContent({ initialData }: DashboardConte
     if (!assigneeId) return 'Unassigned';
     const member = teamMembers.find(m => m.id === assigneeId);
     return member ? member.name : 'Unknown';
+  };
+
+  const getMonthName = (monthLabel: string) => {
+    const [year, month] = monthLabel.split('-');
+    const date = new Date(parseInt(year), parseInt(month) - 1);
+    return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
   };
 
 
@@ -316,6 +359,77 @@ export default function EnhancedDashboardContent({ initialData }: DashboardConte
     }
   };
 
+  const createTask = async (checklistItemId: string) => {
+    if (!newTaskTitle.trim()) return;
+
+    try {
+      const requestBody = {
+        title: newTaskTitle,
+        assignee: newTaskAssignee || null,
+        dueDate: newTaskDueDate || null,
+        notes: newTaskNotes || null,
+        checklistItemId
+      };
+      
+      console.log('Creating task with data:', requestBody);
+      
+      const response = await fetch('/api/tasks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(requestBody)
+      });
+
+      if (!response.ok) {
+        console.error('Response not ok:', response.status, response.statusText);
+        let errorData;
+        try {
+          errorData = await response.json();
+          console.error('Task creation failed:', errorData);
+        } catch (parseError) {
+          console.error('Failed to parse error response:', parseError);
+          errorData = {};
+        }
+        throw new Error(errorData.error || `Failed to create task (${response.status})`);
+      }
+
+      // Reset form
+      console.log('Resetting form after successful task creation');
+      setNewTaskTitle('');
+      setNewTaskAssignee('');
+      setNewTaskDueDate('');
+      setNewTaskNotes('');
+      setShowAddTaskForm(null);
+
+      // Refresh data
+      await fetchMonthData(selectedMonth);
+    } catch (error) {
+      console.error('Error creating task:', error);
+      alert('Failed to create task. Please try again.');
+    }
+  };
+
+  const updateTaskStatus = async (taskId: string, newStatus: string) => {
+    try {
+      const response = await fetch(`/api/tasks/${taskId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          status: newStatus
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to update task status');
+      }
+
+      // Refresh data
+      await fetchMonthData(selectedMonth);
+    } catch (error) {
+      console.error('Error updating task status:', error);
+      alert('Failed to update task status. Please try again.');
+    }
+  };
+
   const deleteTask = async (taskId: string) => {
     if (!confirm('Are you sure you want to delete this task?')) return;
 
@@ -353,35 +467,28 @@ export default function EnhancedDashboardContent({ initialData }: DashboardConte
 
   return (
     <div className="p-8 space-y-8">
-      {/* Header with Month Selector */}
+      {/* Header with Month Title/Selector */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Checklist Dashboard</h1>
-          <p className="text-gray-600 mt-1">
-            {data.month.label} - {new Date(data.month.startDate).toLocaleDateString()} to {new Date(data.month.endDate).toLocaleDateString()}
-          </p>
-        </div>
-        
-        <div className="mt-4 sm:mt-0 flex flex-col sm:flex-row gap-4 items-end">
-          <div>
-            <label htmlFor="month-select" className="block text-sm font-medium text-gray-700 mb-2">
-              Select Month
-            </label>
-            <select
-              id="month-select"
-              value={selectedMonth}
-              onChange={(e) => handleMonthChange(e.target.value)}
-              disabled={loading}
-              className="block w-full sm:w-auto px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-            >
-              {data.availableMonths.map((month) => (
-                <option key={month} value={month}>
-                  {month}
-                </option>
-              ))}
-            </select>
-          </div>
-          
+        <div className="flex items-center relative">
+          <select
+            value={selectedMonth}
+            onChange={(e) => handleMonthChange(e.target.value)}
+            disabled={loading}
+            className="text-3xl font-bold text-gray-900 bg-transparent border-none outline-none cursor-pointer hover:text-blue-600 focus:text-blue-600 pr-8"
+            style={{ 
+              appearance: 'none',
+              backgroundImage: 'url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 24 24\' fill=\'none\' stroke=\'currentColor\' stroke-width=\'2\' stroke-linecap=\'round\' stroke-linejoin=\'round\'%3e%3cpolyline points=\'6,9 12,15 18,9\'%3e%3c/polyline%3e%3c/svg%3e")',
+              backgroundRepeat: 'no-repeat',
+              backgroundPosition: 'right 0.5rem center',
+              backgroundSize: '1rem'
+            }}
+          >
+            {data.availableMonths.map((month) => (
+              <option key={month} value={month}>
+                {getMonthName(month)}
+              </option>
+            ))}
+          </select>
         </div>
       </div>
 
@@ -691,7 +798,94 @@ export default function EnhancedDashboardContent({ initialData }: DashboardConte
                       <tr>
                         <td colSpan={6} className="px-6 py-4 bg-gray-50">
                           <div className="space-y-4">
-                            <h4 className="text-sm font-medium text-gray-900">Tasks for "{item.title}"</h4>
+                            <div className="flex items-center justify-between">
+                              <h4 className="text-sm font-medium text-gray-900">Tasks for "{item.title}"</h4>
+                              <button
+                                onClick={() => {
+                                  if (showAddTaskForm === item.id) {
+                                    // Cancel - reset form
+                                    setNewTaskTitle('');
+                                    setNewTaskAssignee('');
+                                    setNewTaskDueDate('');
+                                    setNewTaskNotes('');
+                                    setShowAddTaskForm(null);
+                                  } else {
+                                    // Show form - reset any existing form data
+                                    setNewTaskTitle('');
+                                    setNewTaskAssignee('');
+                                    setNewTaskDueDate('');
+                                    setNewTaskNotes('');
+                                    setShowAddTaskForm(item.id);
+                                  }
+                                }}
+                                className="bg-blue-600 text-white px-3 py-1 rounded text-sm hover:bg-blue-700 transition-colors"
+                              >
+                                {showAddTaskForm === item.id ? 'Cancel' : 'Add Task'}
+                              </button>
+                            </div>
+                            
+                            {/* Add Task Form */}
+                            {showAddTaskForm === item.id && (
+                              <div className="bg-gray-50 p-4 rounded-lg border">
+                                <h5 className="text-sm font-medium text-gray-900 mb-3">Create New Task</h5>
+                                <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                                  <div>
+                                    <label className="block text-xs font-medium text-gray-700 mb-1">Task Title</label>
+                                    <input
+                                      type="text"
+                                      value={newTaskTitle}
+                                      onChange={(e) => setNewTaskTitle(e.target.value)}
+                                      className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                                      placeholder="Enter task title"
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="block text-xs font-medium text-gray-700 mb-1">Assignee</label>
+                                    <select
+                                      value={newTaskAssignee}
+                                      onChange={(e) => setNewTaskAssignee(e.target.value)}
+                                      className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                                    >
+                                      <option value="">Select assignee...</option>
+                                      {teamMembers.map((member) => (
+                                        <option key={member.id} value={member.id}>
+                                          {member.name} ({member.role})
+                                        </option>
+                                      ))}
+                                    </select>
+                                  </div>
+                                  <div>
+                                    <label className="block text-xs font-medium text-gray-700 mb-1">Due Date</label>
+                                    <input
+                                      type="date"
+                                      value={newTaskDueDate}
+                                      onChange={(e) => setNewTaskDueDate(e.target.value)}
+                                      className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                                    />
+                                  </div>
+                                  <div className="flex items-end gap-2">
+                                    <button
+                                      onClick={() => createTask(item.id)}
+                                      disabled={!newTaskTitle.trim()}
+                                      className="bg-green-600 text-white px-3 py-1 rounded text-sm hover:bg-green-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
+                                    >
+                                      Create
+                                    </button>
+                                  </div>
+                                </div>
+                                <div className="mt-3">
+                                  <label className="block text-xs font-medium text-gray-700 mb-1">Notes (Optional)</label>
+                                  <textarea
+                                    value={newTaskNotes}
+                                    onChange={(e) => setNewTaskNotes(e.target.value)}
+                                    className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                                    placeholder="Add any additional notes..."
+                                    rows={2}
+                                  />
+                                </div>
+                              </div>
+                            )}
+                            
                             <div className="overflow-x-auto">
                               <table className="min-w-full divide-y divide-gray-200">
                                 <thead className="bg-gray-100">
@@ -720,7 +914,7 @@ export default function EnhancedDashboardContent({ initialData }: DashboardConte
                                         {task.title}
                                       </td>
                                       <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500">
-                                        {task.assignee || 'Unassigned'}
+                                        {getTeamMemberName(task.assignee)}
                                       </td>
                                       <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500">
                                         <span className={isOverdue(task.dueDate, task.status) ? 'text-red-600 font-medium' : ''}>
@@ -728,15 +922,26 @@ export default function EnhancedDashboardContent({ initialData }: DashboardConte
                                         </span>
                                       </td>
                                       <td className="px-4 py-2 whitespace-nowrap">
-                                        <StatusBadge status={task.status} />
+                                        <select
+                                          value={task.status}
+                                          onChange={(e) => updateTaskStatus(task.id, e.target.value)}
+                                          className="text-xs border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                                          onClick={(e) => e.stopPropagation()}
+                                        >
+                                          <option value="NOT_STARTED">Not Started</option>
+                                          <option value="IN_PROGRESS">In Progress</option>
+                                          <option value="DONE">Done</option>
+                                        </select>
                                       </td>
                                       <td className="px-4 py-2 whitespace-nowrap text-sm font-medium">
-                                        <button
-                                          onClick={() => deleteTask(task.id)}
-                                          className="text-red-600 hover:text-red-900"
-                                        >
-                                          Delete
-                                        </button>
+                                        <div className="flex gap-2">
+                                          <button
+                                            onClick={() => deleteTask(task.id)}
+                                            className="text-red-600 hover:text-red-900"
+                                          >
+                                            Delete
+                                          </button>
+                                        </div>
                                       </td>
                                     </tr>
                                   ))}

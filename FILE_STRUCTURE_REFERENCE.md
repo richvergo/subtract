@@ -62,14 +62,23 @@ checklist_app/
 │   │   │   ├── memberships/
 │   │   │   │   └── [id]/
 │   │   │   │       └── route.ts
+│   │   │   ├── months/
+│   │   │   │   ├── copy/
+│   │   │   │   │   └── route.ts
+│   │   │   │   ├── generate/
+│   │   │   │   │   └── route.ts
+│   │   │   │   └── route.ts
 │   │   │   ├── register/
 │   │   │   │   └── route.ts
+│   │   │   ├── team-members/
+│   │   │   │   └── route.ts
 │   │   │   └── tasks/
-│   │   │       └── [id]/
-│   │   │           └── route.ts
+│   │   │       ├── [id]/
+│   │   │       │   └── route.ts
+│   │   │       └── route.ts
 │   │   ├── components/           # React components
 │   │   │   ├── DashboardContent.tsx
-│   │   │   ├── EnhancedDashboardContent.tsx
+│   │   │   ├── EnhancedDashboardContent.tsx  # Main dashboard with CRUD, month navigation, team management
 │   │   │   ├── EntitySwitcher.tsx
 │   │   │   ├── LayoutWithSidebar.tsx
 │   │   │   ├── Providers.tsx
@@ -212,6 +221,57 @@ npx prisma studio
 npm run build
 ```
 
+## 🔌 **API Endpoints Reference**
+
+### Authentication & Session
+- `POST /api/auth/[...nextauth]` - NextAuth authentication
+- `POST /api/auth/switch-entity` - Switch active entity
+
+### Entity & User Management
+- `GET|POST /api/entities` - Entity CRUD operations
+- `POST /api/entities/[id]/invite` - Invite users to entity
+- `PATCH|DELETE /api/memberships/[id]` - Manage user memberships
+- `GET /api/team-members` - Get team members for active entity
+
+### Dashboard & Data
+- `GET /api/dashboard` - Dashboard data with auto-month generation
+- `GET|POST /api/checklist` - Checklist item CRUD
+- `PATCH|DELETE /api/checklist/[id]` - Individual checklist item operations
+- `GET|POST /api/tasks` - Task CRUD operations
+- `PATCH|DELETE /api/tasks/[id]` - Individual task operations
+
+### Month Management
+- `GET|POST /api/months` - Month CRUD operations
+- `POST /api/months/generate` - Generate all 12 months for current year
+- `POST /api/months/copy` - Copy checklist items from previous month
+
+### User Registration
+- `POST /api/register` - User registration
+
+## ✨ **New Features (v3.0)**
+
+### Enhanced Dashboard
+- **Month Navigation**: Page title shows current month with dropdown to switch months
+- **Automatic Month Generation**: System creates all 12 months for current year
+- **Month Copying**: Future months automatically copy checklist items from previous month
+
+### Task Management
+- **Task Creation**: Create tasks under checklist items with individual assignees
+- **Task Editing**: Update task status, assignee, due date, and notes
+- **Task Deletion**: Remove tasks from checklist items
+- **Status Management**: Quick status changes for both checklist items and tasks
+
+### Team Management
+- **Team Member Dropdowns**: Assignee fields show team members from active entity
+- **Role-Based Ordering**: Team members ordered by role (ADMIN, MANAGER, EMPLOYEE)
+- **Entity-Scoped Access**: Only show team members from current entity
+
+### Admin Capabilities
+- **Checklist Item Editing**: Edit title, assignee, due date, and status
+- **Quick Status Changes**: Dropdown menus for rapid status updates
+- **Form Validation**: Zod schemas for all API endpoints
+- **Enhanced Error Handling**: Detailed error messages and debugging
+
 ## 🔍 **Verification Checklist**
 
 Before making changes, verify:
@@ -289,6 +349,6 @@ npx next dev
 
 ---
 
-**Last Updated**: September 7, 2025  
-**Version**: 2.0 - Multi-Entity Architecture  
-**Status**: ✅ Verified and Working with RBAC
+**Last Updated**: January 8, 2025  
+**Version**: 3.0 - Enhanced Dashboard with Task Management  
+**Status**: ✅ Verified and Working with RBAC, Month Navigation, and Task Management

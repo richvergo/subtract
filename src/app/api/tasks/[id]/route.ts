@@ -25,12 +25,37 @@ export async function PATCH(
     const body = await request.json();
     const updateData = UpdateTaskSchema.parse(body);
 
-    // Verify the task belongs to the current user
+    // Find current user with memberships
+    const user = await db.user.findUnique({
+      where: { email: session.user.email },
+      include: {
+        memberships: {
+          include: {
+            entity: true
+          }
+        }
+      }
+    });
+
+    if (!user) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    }
+
+    // Get the active entity from session or use the first one
+    const activeEntityId = session.user.activeEntityId || user.memberships[0]?.entityId;
+    
+    if (!activeEntityId) {
+      return NextResponse.json({ error: 'No active entity' }, { status: 400 });
+    }
+
+    // Verify the task belongs to the current entity
     const existingTask = await db.task.findFirst({
       where: {
         id,
-        month: {
-          user: { email: session.user.email }
+        checklistItem: {
+          month: {
+            entityId: activeEntityId
+          }
         }
       }
     });
@@ -72,12 +97,37 @@ export async function DELETE(
 
     const { id } = await params;
 
-    // Verify the task belongs to the current user
+    // Find current user with memberships
+    const user = await db.user.findUnique({
+      where: { email: session.user.email },
+      include: {
+        memberships: {
+          include: {
+            entity: true
+          }
+        }
+      }
+    });
+
+    if (!user) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    }
+
+    // Get the active entity from session or use the first one
+    const activeEntityId = session.user.activeEntityId || user.memberships[0]?.entityId;
+    
+    if (!activeEntityId) {
+      return NextResponse.json({ error: 'No active entity' }, { status: 400 });
+    }
+
+    // Verify the task belongs to the current entity
     const existingTask = await db.task.findFirst({
       where: {
         id,
-        month: {
-          user: { email: session.user.email }
+        checklistItem: {
+          month: {
+            entityId: activeEntityId
+          }
         }
       }
     });

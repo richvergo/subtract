@@ -4,6 +4,110 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { getUserWithMemberships, canAccessEntity } from '@/lib/permissions';
 
+async function generateAllMonthsForYear(entityId: string, year: number) {
+  for (let month = 1; month <= 12; month++) {
+    const monthLabel = `${year}-${month.toString().padStart(2, '0')}`;
+    
+    // Check if month already exists
+    const existingMonth = await db.monthClose.findUnique({
+      where: { entityId_label: { entityId, label: monthLabel } }
+    });
+
+    if (!existingMonth) {
+      // Create the month
+      const startDate = new Date(year, month - 1, 1);
+      startDate.setHours(0, 0, 0, 0);
+      
+      const endDate = new Date(year, month, 0);
+      endDate.setHours(23, 59, 59, 999);
+
+      await db.monthClose.create({
+        data: {
+          entityId,
+          label: monthLabel,
+          startDate,
+          endDate
+        }
+      });
+    }
+  }
+}
+
+async function copyFromPreviousMonth(entityId: string, targetMonthLabel: string) {
+  // Get the previous month
+  const [year, month] = targetMonthLabel.split('-').map(Number);
+  let prevYear = year;
+  let prevMonth = month - 1;
+  
+  if (prevMonth === 0) {
+    prevMonth = 12;
+    prevYear = year - 1;
+  }
+  
+  const prevMonthLabel = `${prevYear}-${prevMonth.toString().padStart(2, '0')}`;
+  
+  // Find previous month with checklist items
+  const previousMonth = await db.monthClose.findUnique({
+    where: { entityId_label: { entityId, label: prevMonthLabel } },
+    include: {
+      checklistItems: {
+        include: {
+          tasks: true
+        }
+      }
+    }
+  });
+
+  if (!previousMonth || previousMonth.checklistItems.length === 0) {
+    return; // Nothing to copy
+  }
+
+  // Find target month
+  const targetMonth = await db.monthClose.findUnique({
+    where: { entityId_label: { entityId, label: targetMonthLabel } }
+  });
+
+  if (!targetMonth) {
+    return; // Target month doesn't exist
+  }
+
+  // Check if target month already has items
+  const existingItems = await db.checklistItem.findMany({
+    where: { monthId: targetMonth.id }
+  });
+
+  if (existingItems.length > 0) {
+    return; // Already has items, don't copy
+  }
+
+  // Copy checklist items and tasks
+  for (const item of previousMonth.checklistItems) {
+    const newItem = await db.checklistItem.create({
+      data: {
+        title: item.title,
+        assignee: item.assignee,
+        dueDate: item.dueDate,
+        status: 'NOT_STARTED', // Reset status for new month
+        monthId: targetMonth.id
+      }
+    });
+
+    // Copy tasks
+    for (const task of item.tasks) {
+      await db.task.create({
+        data: {
+          title: task.title,
+          assignee: task.assignee,
+          dueDate: task.dueDate,
+          status: 'NOT_STARTED', // Reset status for new month
+          notes: task.notes,
+          checklistItemId: newItem.id
+        }
+      });
+    }
+  }
+}
+
 export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
@@ -39,12 +143,28 @@ export async function GET(request: NextRequest) {
         include: {
           checklistItems: {
             include: {
-              tasks: {
-              }
-            },
+              tasks: true
+            }
           }
         }
       });
+
+      // If month exists but has no items, try to copy from previous month
+      if (targetMonth && targetMonth.checklistItems.length === 0) {
+        await copyFromPreviousMonth(entityId, monthLabel);
+        
+        // Reload the month with copied items
+        targetMonth = await db.monthClose.findUnique({
+          where: { entityId_label: { entityId, label: monthLabel } },
+          include: {
+            checklistItems: {
+              include: {
+                tasks: true
+              }
+            }
+          }
+        });
+      }
     } else {
       // Load current month or most recent
       const currentMonth = new Date().toISOString().slice(0, 7); // YYYY-MM format
@@ -76,36 +196,28 @@ export async function GET(request: NextRequest) {
           orderBy: { label: 'desc' }
         });
 
-        // If no months exist at all, create the current month
+        // If no months exist at all, generate all months for the year
         if (!targetMonth) {
-          const startDate = new Date();
-          startDate.setDate(1);
-          startDate.setHours(0, 0, 0, 0);
+          await generateAllMonthsForYear(entityId, currentYear);
           
-          const endDate = new Date(startDate);
-          endDate.setMonth(endDate.getMonth() + 1);
-          endDate.setDate(0);
-          endDate.setHours(23, 59, 59, 999);
-
-          targetMonth = await db.monthClose.create({
-            data: {
-              entityId,
-              label: currentMonth,
-              startDate,
-              endDate
-            },
+          // Now try to find the current month again
+          targetMonth = await db.monthClose.findUnique({
+            where: { entityId_label: { entityId, label: currentMonth } },
             include: {
               checklistItems: {
                 include: {
-                  tasks: {
-                  }
-                },
+                  tasks: true
+                }
               }
             }
           });
         }
       }
     }
+
+    // Ensure all months for the current year exist
+    const currentYear = new Date().getFullYear();
+    await generateAllMonthsForYear(entityId, currentYear);
 
     // Get all available months for the selector
     const availableMonths = await db.monthClose.findMany({
