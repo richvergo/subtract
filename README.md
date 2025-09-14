@@ -1,36 +1,242 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# vergo - AI Agent Automation Platform
+
+vergo is a modern AI agent automation platform that enables users to create, manage, and deploy intelligent agents for automating repetitive tasks and workflows. The platform provides a secure, user-friendly interface for managing both agents and the credentials they need to operate.
+
+## Features
+
+- **🤖 AI Agent Creation**: Create agents by recording workflows with rich DOM metadata capture
+- **🧠 LLM-Powered Intelligence**: Automatic intent generation and self-healing selector repair
+- **🔐 Secure Credential Management**: Encrypted storage of login credentials for agent authentication
+- **⚡ Smart Execution**: Two-stage execution with primary automation and LLM fallback repair
+- **📊 Rich Metadata**: Capture DOM elements, timestamps, and contextual information for robust automation
+- **🎨 Modern UI**: Clean, responsive interface built with Next.js 15, React 19, and custom CSS
+
+## 📚 Documentation & Guidelines
+
+**🚀 Start here**: **[DOCUMENTATION_INDEX.md](./DOCUMENTATION_INDEX.md)** - Your guide to all documentation
+
+### Essential Reading
+- **[DEVELOPMENT_GUIDELINES.md](./DEVELOPMENT_GUIDELINES.md)** - Comprehensive coding standards and guard rails
+- **[QUICK_REFERENCE.md](./QUICK_REFERENCE.md)** - Common fixes and essential commands
+- **[CONTRIBUTING.md](./CONTRIBUTING.md)** - How to contribute effectively
+- **[ARCHITECTURE.md](./ARCHITECTURE.md)** - System architecture and design decisions
+- **[TESTING.md](./TESTING.md)** - Testing strategies and best practices
+
+These documents prevent common errors and ensure code quality consistency.
 
 ## Getting Started
 
-First, run the development server:
+### Prerequisites
 
+- Node.js 18+ 
+- npm or yarn
+- SQLite database
+
+### Installation
+
+1. Clone the repository:
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+git clone <repository-url>
+cd vergo-automation-platform
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+2. Install dependencies:
+```bash
+npm install
+```
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+3. Set up environment variables:
+```bash
+cp infra/env.example .env.local
+# Edit .env.local with your configuration
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+4. Set up the database:
+```bash
+npx prisma migrate dev
+npx prisma generate
+```
 
-## Learn More
+5. Start the development server:
+```bash
+npm run dev
+```
 
-To learn more about Next.js, take a look at the following resources:
+Open [http://localhost:3000](http://localhost:3000) to see the application.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Project Structure
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```
+src/
+├── app/                    # Next.js app router pages
+│   ├── agents/            # Agent management pages
+│   ├── logins/            # Login credential management
+│   ├── api/               # API routes
+│   └── components/        # Shared components
+├── components/            # Reusable UI components
+├── lib/                   # Utility functions and configurations
+└── prisma/               # Database schema and migrations
+```
 
-## Deploy on Vercel
+## Technology Stack
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+- **Frontend**: Next.js 15, React 19, TypeScript
+- **Styling**: Custom CSS classes in `globals.css` + inline styles (no Tailwind/shadcn for MVP)
+- **Data Fetching**: SWR for caching and real-time updates
+- **UI Components**: Custom components (Sidebar, Buttons, Cards) with inline styles
+- **Routing**: Next.js App Router with file-based routing
+- **Database**: SQLite with Prisma ORM (PostgreSQL for production)
+- **Authentication**: NextAuth.js with JWT strategy
+- **Automation**: Puppeteer for browser automation
+- **Queue System**: Redis + BullMQ for background job processing
+- **LLM Integration**: OpenAI API for intent generation and selector repair
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## API Endpoints
+
+### Agent Management
+- `GET /api/agents` - List user's agents with enriched metadata
+- `POST /api/agents` - Create new agent with purpose prompt
+- `GET /api/agents/[id]` - Get agent details with config and intents
+- `PUT /api/agents/[id]` - Update agent configuration
+- `DELETE /api/agents/[id]` - Delete agent
+- `POST /api/agents/[id]/run` - Execute an agent with fallback repair
+- `GET /api/agents/[id]/runs` - Get execution history with repair logs
+- `POST /api/agents/[id]/activate` - Activate agent for production use
+- `POST /api/agents/[id]/annotate` - Generate LLM annotations for agent
+- `POST /api/agents/[id]/repair` - Repair agent with LLM fallback
+
+### Recording & Processing
+- `POST /api/agents/record` - Single-step agent creation from browser recording with LLM annotation
+
+### Agent Runs
+- `POST /api/agent-runs/[id]/confirm` - Confirm successful agent run
+- `POST /api/agent-runs/[id]/reject` - Reject failed agent run
+
+### Login Management
+- `GET /api/logins` - List user's login credentials (masked)
+- `POST /api/logins` - Add new login credentials (encrypted)
+- `GET /api/logins/[id]` - Get login details
+- `PUT /api/logins/[id]` - Update login credentials
+- `DELETE /api/logins/[id]` - Delete login
+- `POST /api/logins/health` - Test all user's login credentials
+- `GET /api/logins/health` - Get health status of all user's logins
+- `POST /api/logins/[id]/health` - Test specific login credentials
+- `GET /api/logins/[id]/health` - Check specific login health status
+- `POST /api/logins/[id]/check` - Check login connection
+- `GET /api/logins/[id]/status` - Get login status
+- `POST /api/logins/[id]/reconnect/start` - Start login reconnection process
+- `POST /api/logins/[id]/reconnect/complete` - Complete login reconnection
+
+### Authentication & Users
+- `POST /api/register` - Register new user
+- `GET /api/users` - Get user information
+- `POST /api/users` - Update user information
+- `POST /api/auth/switch-entity` - Switch user entity context
+
+### System
+- `GET /api/health` - System health check
+- `GET /api/login-templates` - Get available login templates
+- `GET /api/test` - Test endpoint
+
+## Development
+
+### Database Management
+
+```bash
+# View database in Prisma Studio
+npx prisma studio
+
+# Reset database
+npx prisma migrate reset
+
+# Generate Prisma client
+npx prisma generate
+
+# Push schema changes
+npx prisma db push
+```
+
+### Testing
+
+```bash
+# Run all tests
+npm test
+
+# Run specific test files
+npm test -- tests/test_enhanced_agents_simple.test.ts
+
+# Run tests in watch mode
+npm run test:watch
+```
+
+### Agent Development
+
+```bash
+# Start development server
+npm run dev
+
+# Start background worker for agent execution
+npm run worker:dev
+
+# Test agent creation from recording
+curl -X POST http://localhost:3000/api/agents/record \
+  -H "Content-Type: application/json" \
+  -d '{"name": "Test Agent", "recordedSteps": [...], "purposePrompt": "..."}'
+
+# Test agent execution
+curl -X POST http://localhost:3000/api/agents/{id}/run
+```
+
+## Deployment
+
+The application is configured for deployment with Docker containers. See the deployment guide in the `infra/` directory for detailed instructions.
+
+### Production Stack
+- **Frontend**: Vercel (Next.js)
+- **Backend**: Render (Node.js + Puppeteer)
+- **Database**: PostgreSQL (Render managed)
+- **Queue**: Redis (Render managed)
+- **Storage**: Local volumes for agent outputs
+
+## Architecture Validation Summary
+
+| Component | Status | Notes |
+|-----------|--------|-------|
+| **API Endpoints** | ✅ **ACCURATE** | All documented endpoints exist and work |
+| **Data Flow** | ✅ **ACCURATE** | Redis queue → Worker → Puppeteer confirmed |
+| **Database Schema** | ✅ **ACCURATE** | Field names and relationships correct |
+| **Security Model** | ✅ **ACCURATE** | Encryption and RBAC implemented |
+| **Frontend Styling** | ✅ **FIXED** | Updated to Custom CSS, inline styles |
+| **Agent Creation** | ✅ **FIXED** | Single-step process via `/api/agents/record` |
+| **Session Management** | ✅ **ACCURATE** | 2FA and reconnect logic confirmed |
+| **Testing Strategy** | ✅ **ACCURATE** | Puppeteer + LLM mocked in CI |
+
+## Areas Needing Product Decisions
+
+### Session Reuse / 2FA Design
+**Current Implementation:** Agents check session validity before execution. Failed sessions trigger `NEEDS_RECONNECT` status.
+**Decision Needed:** Should failed session checks trigger automatic re-authentication or require manual user intervention?
+
+### Agent Creation UX
+**Current Implementation:** Single API call creates agent from recording with LLM annotation.
+**Decision Needed:** Should this remain single-step or be split into upload → process → create for better UX?
+
+### Testing Strategy
+**Current Implementation:** Comprehensive mocking of Puppeteer + LLM in CI.
+**Decision Needed:** Should we add integration tests with real browser instances for critical paths?
+
+### Error Handling
+**Current Implementation:** Basic error responses and status updates.
+**Decision Needed:** Should we implement retry logic for failed agent runs?
+
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Add tests if applicable
+5. Submit a pull request
+
+## License
+
+This project is licensed under the MIT License.

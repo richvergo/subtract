@@ -1,213 +1,309 @@
-import { Suspense } from 'react';
-import { getSession } from '@/lib/auth';
-import { db } from '@/lib/db';
-import EnhancedDashboardContent from '@/app/components/EnhancedDashboardContent';
-import { redirect } from 'next/navigation';
+"use client"
 
-async function getDashboardData(monthLabel?: string) {
-  const session = await getSession();
-  
-  // Log warning if no session
-  if (!session) {
-    console.warn('No session found, redirecting to register');
-    redirect('/register');
-  }
-  
-  if (!session.user?.email) {
-    console.warn('Session exists but no user email found, redirecting to register');
-    redirect('/register');
-  }
+import Link from "next/link"
 
-  // Find current user with memberships
-  const user = await db.user.findUnique({
-    where: { email: session.user.email },
-    include: {
-      memberships: {
-        include: {
-          entity: true
-        }
-      }
-    }
-  });
-
-  if (!user) {
-    console.warn(`User not found for email: ${session.user.email}, redirecting to register`);
-    redirect('/register');
-  }
-
-  // Get the active entity from session or use the first one
-  const activeEntityId = session.user.activeEntityId || user.memberships[0]?.entityId;
-  
-  if (!activeEntityId) {
-    console.warn(`No active entity found for user: ${session.user.email}, redirecting to register`);
-    redirect('/register');
-  }
-
-  // Determine which month to load
-  let targetMonth;
-  if (monthLabel) {
-    // Load specific month
-    targetMonth = await db.monthClose.findUnique({
-      where: { entityId_label: { entityId: activeEntityId, label: monthLabel } },
-      include: {
-        checklistItems: {
-          include: {
-            tasks: true
-          },
-        },
-      }
-    });
-  } else {
-    // Load current month or most recent
-    const currentMonth = new Date().toISOString().slice(0, 7); // YYYY-MM format
-    
-    targetMonth = await db.monthClose.findUnique({
-      where: { entityId_label: { entityId: activeEntityId, label: currentMonth } },
-      include: {
-        checklistItems: {
-          include: {
-            tasks: true
-          },
-        },
-      }
-    });
-
-    // If current month doesn't exist, get the most recent or create current month
-    if (!targetMonth) {
-      targetMonth = await db.monthClose.findFirst({
-        where: { entityId: activeEntityId },
-        include: {
-          checklistItems: {
-            include: {
-              tasks: {
-              }
-            },
-          },
-        },
-        orderBy: { label: 'desc' }
-      });
-
-      // If no months exist at all, create the current month
-      if (!targetMonth) {
-        const startDate = new Date();
-        startDate.setDate(1);
-        startDate.setHours(0, 0, 0, 0);
-        
-        const endDate = new Date(startDate);
-        endDate.setMonth(endDate.getMonth() + 1);
-        endDate.setDate(0);
-        endDate.setHours(23, 59, 59, 999);
-
-        targetMonth = await db.monthClose.create({
-          data: {
-            entityId: activeEntityId,
-            label: currentMonth,
-            startDate,
-            endDate
-          },
-          include: {
-            checklistItems: {
-              include: {
-                tasks: {
-                }
-              },
-            },
-          }
-        });
-      }
-    }
-  }
-
-  // Get all available months for the selector
-  const availableMonths = await db.monthClose.findMany({
-    where: { entityId: activeEntityId },
-    select: { label: true },
-    orderBy: { label: 'desc' }
-  });
-
-  if (!targetMonth) {
-    return {
-      month: null,
-      checklistItems: [],
-      summary: {
-        totalTasks: 0,
-        completedTasks: 0,
-        remainingTasks: 0,
-        overdueTasks: 0,
-        completionPercentage: 0
-      },
-      availableMonths: availableMonths.map(m => m.label)
-    };
-  }
-
-  // Calculate summary statistics
-  const allTasks = targetMonth.checklistItems.flatMap((item: any) => item.tasks);
-  
-  const totalTasks = allTasks.length;
-  const completedTasks = allTasks.filter((task: any) => task.status === 'DONE').length;
-  const remainingTasks = totalTasks - completedTasks;
-  
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  
-  const overdueTasks = allTasks.filter((task: any) => 
-    task.dueDate && 
-    task.dueDate < today && 
-    task.status !== 'DONE'
-  ).length;
-
-  const completionPercentage = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
-
-  // Process checklist items
-  const checklistItems = targetMonth.checklistItems.map((item: any) => {
-    // A checklist item is complete only if ALL its tasks are DONE
-    const isComplete = item.tasks.length > 0 ? item.tasks.every((task: any) => task.status === 'DONE') : item.status === 'DONE';
-    
-    return {
-      id: item.id,
-      title: item.title,
-      assignee: item.assignee,
-      dueDate: item.dueDate?.toISOString() || null,
-      status: item.status,
-      tasks: item.tasks.map((task: any) => ({
-        ...task,
-        dueDate: task.dueDate?.toISOString() || null
-      })),
-      isComplete
-    };
-  });
-
-  const allChecklistItems = checklistItems;
-
-  const summary = {
-    totalTasks,
-    completedTasks,
-    remainingTasks,
-    overdueTasks,
-    completionPercentage
-  };
-
-  return {
-    month: {
-      id: targetMonth.id,
-      label: targetMonth.label,
-      startDate: targetMonth.startDate.toISOString(),
-      endDate: targetMonth.endDate.toISOString()
-    },
-    checklistItems: allChecklistItems,
-    summary,
-    availableMonths: availableMonths.map(m => m.label)
-  };
-}
-
-export default async function Dashboard() {
-  const data = await getDashboardData();
-
+export default function HomePage() {
   return (
-    <div className="p-6">
-      <Suspense fallback={<div className="text-center py-8">Loading dashboard...</div>}>
-        <EnhancedDashboardContent initialData={data} />
-      </Suspense>
+    <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
+      <div style={{ textAlign: "center" }}>
+        <h1 style={{ 
+          fontSize: "36px", 
+          fontWeight: "700", 
+          marginBottom: "16px",
+          color: "#333"
+        }}>
+          Welcome to vergo
+        </h1>
+        <p style={{ 
+          fontSize: "20px", 
+          color: "#666", 
+          marginBottom: "32px" 
+        }}>
+          Your automation platform for managing agents and login credentials.
+        </p>
+        <div style={{ marginBottom: "32px" }}>
+          <Link href="/register">
+            <button className="button" style={{ 
+              padding: "16px 32px", 
+              fontSize: "16px",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "8px"
+            }}>
+              Get Started - Sign Up / Login
+            </button>
+          </Link>
+        </div>
+      </div>
+
+      {/* Dashboard Stats */}
+      <div style={{ 
+        display: "grid", 
+        gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))", 
+        gap: "16px", 
+        maxWidth: "1200px", 
+        margin: "0 auto 32px auto" 
+      }}>
+        <div className="card">
+          <div style={{ display: "flex", alignItems: "center" }}>
+            <div style={{
+              width: "32px",
+              height: "32px",
+              backgroundColor: "#007bff",
+              borderRadius: "6px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: "16px",
+              marginRight: "16px"
+            }}>
+              🤖
+            </div>
+            <div>
+              <p style={{ 
+                fontSize: "14px", 
+                fontWeight: "500", 
+                color: "#666",
+                margin: "0 0 4px 0" 
+              }}>
+                Total Agents
+              </p>
+              <p style={{ 
+                fontSize: "24px", 
+                fontWeight: "700", 
+                margin: 0,
+                color: "#333"
+              }}>
+                -
+              </p>
+            </div>
+          </div>
+        </div>
+        
+        <div className="card">
+          <div style={{ display: "flex", alignItems: "center" }}>
+            <div style={{
+              width: "32px",
+              height: "32px",
+              backgroundColor: "#28a745",
+              borderRadius: "6px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: "16px",
+              marginRight: "16px"
+            }}>
+              ⚡
+            </div>
+            <div>
+              <p style={{ 
+                fontSize: "14px", 
+                fontWeight: "500", 
+                color: "#666",
+                margin: "0 0 4px 0" 
+              }}>
+                Live Agents
+              </p>
+              <p style={{ 
+                fontSize: "24px", 
+                fontWeight: "700", 
+                margin: 0,
+                color: "#333"
+              }}>
+                -
+              </p>
+            </div>
+          </div>
+        </div>
+        
+        <div className="card">
+          <div style={{ display: "flex", alignItems: "center" }}>
+            <div style={{
+              width: "32px",
+              height: "32px",
+              backgroundColor: "#6f42c1",
+              borderRadius: "6px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: "16px",
+              marginRight: "16px"
+            }}>
+              🔑
+            </div>
+            <div>
+              <p style={{ 
+                fontSize: "14px", 
+                fontWeight: "500", 
+                color: "#666",
+                margin: "0 0 4px 0" 
+              }}>
+                Logins
+              </p>
+              <p style={{ 
+                fontSize: "24px", 
+                fontWeight: "700", 
+                margin: 0,
+                color: "#333"
+              }}>
+                -
+              </p>
+            </div>
+          </div>
+        </div>
+        
+        <div className="card">
+          <div style={{ display: "flex", alignItems: "center" }}>
+            <div style={{
+              width: "32px",
+              height: "32px",
+              backgroundColor: "#fd7e14",
+              borderRadius: "6px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: "16px",
+              marginRight: "16px"
+            }}>
+              👥
+            </div>
+            <div>
+              <p style={{ 
+                fontSize: "14px", 
+                fontWeight: "500", 
+                color: "#666",
+                margin: "0 0 4px 0" 
+              }}>
+                Team Members
+              </p>
+              <p style={{ 
+                fontSize: "24px", 
+                fontWeight: "700", 
+                margin: 0,
+                color: "#333"
+              }}>
+                -
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div style={{ 
+        display: "grid", 
+        gridTemplateColumns: "repeat(auto-fit, minmax(400px, 1fr))", 
+        gap: "24px", 
+        maxWidth: "800px", 
+        margin: "0 auto" 
+      }}>
+        <div className="card" style={{
+          transition: "box-shadow 0.2s ease",
+          cursor: "pointer"
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.boxShadow = "0 4px 12px rgba(0, 0, 0, 0.15)";
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.boxShadow = "0 2px 4px rgba(0, 0, 0, 0.1)";
+        }}>
+          <div style={{ 
+            paddingBottom: "16px", 
+            borderBottom: "1px solid #eee", 
+            marginBottom: "16px" 
+          }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+              <div style={{
+                width: "32px",
+                height: "32px",
+                backgroundColor: "#007bff",
+                borderRadius: "6px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: "16px"
+              }}>
+                🤖
+              </div>
+              <h2 style={{ fontSize: "18px", fontWeight: "600", margin: 0 }}>Agents</h2>
+            </div>
+          </div>
+          <div>
+            <p style={{ 
+              color: "#666", 
+              marginBottom: "16px",
+              lineHeight: "1.5"
+            }}>
+              Create and manage your automation agents to handle repetitive tasks.
+            </p>
+            <Link href="/agents">
+              <button className="button" style={{ 
+                width: "100%",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "8px"
+              }}>
+                Manage Agents
+                <span>→</span>
+              </button>
+            </Link>
+          </div>
+        </div>
+
+        <div className="card" style={{
+          transition: "box-shadow 0.2s ease",
+          cursor: "pointer"
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.boxShadow = "0 4px 12px rgba(0, 0, 0, 0.15)";
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.boxShadow = "0 2px 4px rgba(0, 0, 0, 0.1)";
+        }}>
+          <div style={{ 
+            paddingBottom: "16px", 
+            borderBottom: "1px solid #eee", 
+            marginBottom: "16px" 
+          }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+              <div style={{
+                width: "32px",
+                height: "32px",
+                backgroundColor: "#28a745",
+                borderRadius: "6px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: "16px"
+              }}>
+                🔑
+              </div>
+              <h2 style={{ fontSize: "18px", fontWeight: "600", margin: 0 }}>Logins</h2>
+            </div>
+          </div>
+          <div>
+            <p style={{ 
+              color: "#666", 
+              marginBottom: "16px",
+              lineHeight: "1.5"
+            }}>
+              Securely store and manage login credentials for your automation agents.
+            </p>
+            <Link href="/logins">
+              <button className="button" style={{ 
+                width: "100%",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "8px"
+              }}>
+                Manage Logins
+                <span>→</span>
+              </button>
+            </Link>
+          </div>
+        </div>
+      </div>
     </div>
-  );
+  )
 }

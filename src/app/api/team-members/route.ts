@@ -27,45 +27,41 @@ export async function GET(request: NextRequest) {
 
     // Get the active entity from session or use the first one
     const activeEntityId = session.user.activeEntityId || user.memberships[0]?.entityId;
-    
+
     if (!activeEntityId) {
       return NextResponse.json({ error: 'No active entity' }, { status: 400 });
     }
 
-    // Get all team members for the active entity
-    const teamMembers = await db.membership.findMany({
-      where: { entityId: activeEntityId },
+    // Get all members of the active entity
+    const members = await db.membership.findMany({
+      where: {
+        entityId: activeEntityId
+      },
       include: {
         user: {
           select: {
             id: true,
-            email: true,
-            name: true
+            name: true,
+            email: true
           }
         }
       },
-      orderBy: [
-        { role: 'asc' }, // ADMIN first, then MANAGER, then EMPLOYEE
-        { user: { name: 'asc' } }
-      ]
-    });
-
-    // Format the response
-    const formattedMembers = teamMembers.map(membership => ({
-      id: membership.user.id,
-      email: membership.user.email,
-      name: membership.user.name,
-      role: membership.role
-    }));
-
-    return NextResponse.json({
-      teamMembers: formattedMembers,
-      activeEntity: {
-        id: activeEntityId,
-        name: user.memberships.find(m => m.entityId === activeEntityId)?.entity.name
+      orderBy: {
+        user: {
+          name: 'asc'
+        }
       }
     });
 
+    // Transform the data to match the expected format
+    const teamMembers = members.map(membership => ({
+      id: membership.user.id,
+      name: membership.user.name,
+      email: membership.user.email,
+      role: membership.role
+    }));
+
+    return NextResponse.json({ members: teamMembers });
   } catch (error) {
     console.error('Error fetching team members:', error);
     return NextResponse.json(

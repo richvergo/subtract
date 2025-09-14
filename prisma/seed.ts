@@ -4,19 +4,213 @@ import { hash } from 'bcryptjs';
 const prisma = new PrismaClient();
 
 async function main() {
-  console.log('🌱 Starting enhanced database seeding...');
-
-  // Get current month for MonthClose labels
-  const now = new Date();
-  const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  console.log('🌱 Starting new checklist system seeding...');
 
   try {
     await prisma.$transaction(async (tx) => {
       // Check if data already exists (idempotency)
       const existingUsers = await tx.user.count();
       if (existingUsers > 0) {
-        console.log('📊 Database already contains data. Skipping seed to maintain idempotency.');
-        return;
+      console.log('📊 Database already contains data. Adding test agents and logins...');
+      
+      // Find the test user
+      const testUser = await tx.user.findFirst({
+        where: { email: 'test@example.com' }
+      });
+
+      if (testUser) {
+        console.log(`✅ Found test user: ${testUser.name} (${testUser.email})`);
+        
+        // Create test logins
+        const logins = [
+          {
+            name: 'Google Slides',
+            loginUrl: 'https://slides.google.com',
+            username: 'test@example.com',
+            password: 'testpassword123'
+          },
+          {
+            name: 'Notion',
+            loginUrl: 'https://notion.so',
+            username: 'test@notion.com',
+            password: 'notionpass456'
+          },
+          {
+            name: 'Airtable',
+            loginUrl: 'https://airtable.com',
+            username: 'test@airtable.com',
+            password: 'airtablepass789'
+          }
+        ];
+
+        console.log('🔐 Creating test logins...');
+        const createdLogins = [];
+        
+        for (const loginData of logins) {
+          const existingLogin = await tx.login.findFirst({
+            where: { 
+              name: loginData.name,
+              ownerId: testUser.id
+            }
+          });
+          
+          if (!existingLogin) {
+            const login = await tx.login.create({
+              data: {
+                name: loginData.name,
+                loginUrl: loginData.loginUrl,
+                username: loginData.username, // In real app, this would be encrypted
+                password: loginData.password, // In real app, this would be encrypted
+                ownerId: testUser.id
+              }
+            });
+            createdLogins.push(login);
+            console.log(`✅ Created login: ${login.name}`);
+          } else {
+            createdLogins.push(existingLogin);
+            console.log(`✅ Login already exists: ${existingLogin.name}`);
+          }
+        }
+
+        // Create test agents
+        const agents = [
+          {
+            name: 'Presentation Creator',
+            description: 'Creates presentations automatically from templates',
+            config: JSON.stringify([
+              { action: 'goto', url: 'https://slides.google.com' },
+              { action: 'type', selector: 'input[type="email"]', value: '{{login.username}}' },
+              { action: 'type', selector: 'input[type="password"]', value: '{{login.password}}' },
+              { action: 'click', selector: 'button[type="submit"]' },
+              { action: 'waitForSelector', selector: '.new-presentation' },
+              { action: 'click', selector: '.new-presentation' }
+            ]),
+            status: 'DRAFT'
+          },
+          {
+            name: 'Data Entry Bot',
+            description: 'Automates data entry tasks in spreadsheets',
+            config: JSON.stringify([
+              { action: 'goto', url: 'https://airtable.com' },
+              { action: 'type', selector: 'input[type="email"]', value: '{{login.username}}' },
+              { action: 'type', selector: 'input[type="password"]', value: '{{login.password}}' },
+              { action: 'click', selector: 'button[type="submit"]' },
+              { action: 'waitForSelector', selector: '.add-record' },
+              { action: 'click', selector: '.add-record' }
+            ]),
+            status: 'DRAFT'
+          },
+          {
+            name: 'Document Organizer',
+            description: 'Organizes documents and creates structured workflows',
+            config: JSON.stringify([
+              { action: 'goto', url: 'https://notion.so' },
+              { action: 'type', selector: 'input[type="email"]', value: '{{login.username}}' },
+              { action: 'type', selector: 'input[type="password"]', value: '{{login.password}}' },
+              { action: 'click', selector: 'button[type="submit"]' },
+              { action: 'waitForSelector', selector: '.new-page' },
+              { action: 'click', selector: '.new-page' }
+            ]),
+            status: 'ACTIVE'
+          }
+        ];
+
+        console.log('🤖 Creating test agents...');
+        const createdAgents = [];
+        
+        for (const agentData of agents) {
+          const existingAgent = await tx.agent.findFirst({
+            where: { 
+              name: agentData.name,
+              ownerId: testUser.id
+            }
+          });
+          
+          if (!existingAgent) {
+            const agent = await tx.agent.create({
+              data: {
+                name: agentData.name,
+                description: agentData.description,
+                config: agentData.config,
+                status: agentData.status,
+                ownerId: testUser.id
+              }
+            });
+            createdAgents.push(agent);
+            console.log(`✅ Created agent: ${agent.name} (${agent.status})`);
+          } else {
+            createdAgents.push(existingAgent);
+            console.log(`✅ Agent already exists: ${existingAgent.name}`);
+          }
+        }
+
+        // Link agents to logins
+        console.log('🔗 Linking agents to logins...');
+        
+        // Presentation Creator uses Google Slides
+        const existingLink1 = await tx.agentLogin.findFirst({
+          where: {
+            agentId: createdAgents[0].id,
+            loginId: createdLogins[0].id
+          }
+        });
+        
+        if (!existingLink1) {
+          await tx.agentLogin.create({
+            data: {
+              agentId: createdAgents[0].id,
+              loginId: createdLogins[0].id
+            }
+          });
+          console.log(`✅ Linked ${createdAgents[0].name} to ${createdLogins[0].name}`);
+        }
+
+        // Data Entry Bot uses Airtable
+        const existingLink2 = await tx.agentLogin.findFirst({
+          where: {
+            agentId: createdAgents[1].id,
+            loginId: createdLogins[2].id
+          }
+        });
+        
+        if (!existingLink2) {
+          await tx.agentLogin.create({
+            data: {
+              agentId: createdAgents[1].id,
+              loginId: createdLogins[2].id
+            }
+          });
+          console.log(`✅ Linked ${createdAgents[1].name} to ${createdLogins[2].name}`);
+        }
+
+        // Document Organizer uses Notion
+        const existingLink3 = await tx.agentLogin.findFirst({
+          where: {
+            agentId: createdAgents[2].id,
+            loginId: createdLogins[1].id
+          }
+        });
+        
+        if (!existingLink3) {
+          await tx.agentLogin.create({
+            data: {
+              agentId: createdAgents[2].id,
+              loginId: createdLogins[1].id
+            }
+          });
+          console.log(`✅ Linked ${createdAgents[2].name} to ${createdLogins[1].name}`);
+        }
+
+        console.log('\n🎉 Test agents and logins added successfully!');
+        console.log('\n📊 Summary:');
+        console.log(`- ${createdLogins.length} logins available`);
+        console.log(`- ${createdAgents.length} agents available`);
+        console.log('\n🚀 You can now test the complete happy path flow!');
+      } else {
+        console.log('❌ Test user not found. Please create a user with email test@example.com first.');
+      }
+      
+      return;
       }
 
       console.log('📝 Creating entities...');
@@ -135,232 +329,218 @@ async function main() {
       });
       console.log(`✅ Erin → EMPLOYEE of Beta LLC`);
 
-      console.log('📅 Creating month closes...');
+      console.log('📋 Creating checklists...');
       
-      // Create MonthClose for Alpha Corp
-      const alphaMonth = await tx.monthClose.create({
+      // Create team checklists
+      const alphaTeamChecklist = await tx.checklist.create({
         data: {
+          title: 'Monthly Book Close - September 2025',
+          description: 'Monthly financial close process for Alpha Corp',
+          type: 'TEAM',
           entityId: alphaCorp.id,
-          label: currentMonth,
-          startDate: new Date(now.getFullYear(), now.getMonth(), 1),
-          endDate: new Date(now.getFullYear(), now.getMonth() + 1, 0)
+          createdBy: alice.id,
+          deadline: new Date(2025, 8, 30), // September 30, 2025
+          status: 'ACTIVE'
         }
       });
-      console.log(`✅ Created MonthClose for Alpha Corp: ${currentMonth}`);
+      console.log(`✅ Created team checklist: ${alphaTeamChecklist.title}`);
 
-      // Create MonthClose for Beta LLC
-      const betaMonth = await tx.monthClose.create({
+      const betaTeamChecklist = await tx.checklist.create({
         data: {
+          title: 'Monthly Book Close - September 2025',
+          description: 'Monthly financial close process for Beta LLC',
+          type: 'TEAM',
           entityId: betaLLC.id,
-          label: currentMonth,
-          startDate: new Date(now.getFullYear(), now.getMonth(), 1),
-          endDate: new Date(now.getFullYear(), now.getMonth() + 1, 0)
+          createdBy: dave.id,
+          deadline: new Date(2025, 8, 30), // September 30, 2025
+          status: 'ACTIVE'
         }
       });
-      console.log(`✅ Created MonthClose for Beta LLC: ${currentMonth}`);
+      console.log(`✅ Created team checklist: ${betaTeamChecklist.title}`);
 
-      console.log('�� Creating checklist items...');
+      // Create personal checklists
+      const alicePersonalChecklist = await tx.checklist.create({
+        data: {
+          title: 'Alice\'s Daily Tasks',
+          description: 'Personal productivity checklist',
+          type: 'PERSONAL',
+          entityId: null,
+          createdBy: alice.id,
+          deadline: null,
+          status: 'ACTIVE'
+        }
+      });
+      console.log(`✅ Created personal checklist: ${alicePersonalChecklist.title}`);
+
+      const bobPersonalChecklist = await tx.checklist.create({
+        data: {
+          title: 'Bob\'s Project Management',
+          description: 'Project tracking and management tasks',
+          type: 'PERSONAL',
+          entityId: null,
+          createdBy: bob.id,
+          deadline: new Date(2025, 8, 15), // September 15, 2025
+          status: 'ACTIVE'
+        }
+      });
+      console.log(`✅ Created personal checklist: ${bobPersonalChecklist.title}`);
+
+      console.log('👥 Adding checklist members...');
       
-      // Create ChecklistItems for Alpha Corp
+      // Add members to team checklists
+      // Alpha Corp team checklist members
+      await tx.checklistMember.create({
+        data: {
+          checklistId: alphaTeamChecklist.id,
+          userId: alice.id,
+          role: 'OWNER'
+        }
+      });
+      await tx.checklistMember.create({
+        data: {
+          checklistId: alphaTeamChecklist.id,
+          userId: bob.id,
+          role: 'MEMBER'
+        }
+      });
+      await tx.checklistMember.create({
+        data: {
+          checklistId: alphaTeamChecklist.id,
+          userId: carol.id,
+          role: 'MEMBER'
+        }
+      });
+      console.log(`✅ Added members to Alpha Corp team checklist`);
+
+      // Beta LLC team checklist members
+      await tx.checklistMember.create({
+        data: {
+          checklistId: betaTeamChecklist.id,
+          userId: dave.id,
+          role: 'OWNER'
+        }
+      });
+      await tx.checklistMember.create({
+        data: {
+          checklistId: betaTeamChecklist.id,
+          userId: erin.id,
+          role: 'MEMBER'
+        }
+      });
+      console.log(`✅ Added members to Beta LLC team checklist`);
+
+      console.log('📝 Creating checklist items...');
+      
+      // Create checklist items for Alpha Corp team checklist
       const alphaItem1 = await tx.checklistItem.create({
         data: {
-          monthId: alphaMonth.id,
+          checklistId: alphaTeamChecklist.id,
           title: 'Revenue Recognition Review',
-          owner: alice.id,
+          description: 'Review all revenue recognition policies and ensure compliance',
           assignee: carol.id,
-          dueDate: new Date(now.getFullYear(), now.getMonth(), 15),
+          dueDate: new Date(2025, 8, 15), // September 15
           status: 'IN_PROGRESS',
-          notes: 'Review all revenue recognition policies and ensure compliance'
+          order: 1
         }
       });
-      console.log(`✅ Created checklist item: ${alphaItem1.title} (Owner: Alice, Assignee: Carol)`);
+      console.log(`✅ Created checklist item: ${alphaItem1.title}`);
 
       const alphaItem2 = await tx.checklistItem.create({
         data: {
-          monthId: alphaMonth.id,
+          checklistId: alphaTeamChecklist.id,
           title: 'Accounts Payable Reconciliation',
-          owner: bob.id,
+          description: 'Reconcile all outstanding vendor invoices',
           assignee: carol.id,
-          dueDate: new Date(now.getFullYear(), now.getMonth(), 20),
+          dueDate: new Date(2025, 8, 20), // September 20
           status: 'NOT_STARTED',
-          notes: 'Reconcile all outstanding vendor invoices'
+          order: 2
         }
       });
-      console.log(`✅ Created checklist item: ${alphaItem2.title} (Owner: Bob, Assignee: Carol)`);
+      console.log(`✅ Created checklist item: ${alphaItem2.title}`);
 
       const alphaItem3 = await tx.checklistItem.create({
         data: {
-          monthId: alphaMonth.id,
+          checklistId: alphaTeamChecklist.id,
           title: 'Financial Statement Preparation',
-          owner: alice.id,
+          description: 'Prepare monthly financial statements for board review',
           assignee: bob.id,
-          dueDate: new Date(now.getFullYear(), now.getMonth(), 25),
+          dueDate: new Date(2025, 8, 25), // September 25
           status: 'NOT_STARTED',
-          notes: 'Prepare monthly financial statements for board review'
+          order: 3
         }
       });
-      console.log(`✅ Created checklist item: ${alphaItem3.title} (Owner: Alice, Assignee: Bob)`);
+      console.log(`✅ Created checklist item: ${alphaItem3.title}`);
 
-      // Create ChecklistItems for Beta LLC
+      // Create checklist items for Beta LLC team checklist
       const betaItem1 = await tx.checklistItem.create({
         data: {
-          monthId: betaMonth.id,
+          checklistId: betaTeamChecklist.id,
           title: 'Inventory Count and Valuation',
-          owner: dave.id,
+          description: 'Complete physical inventory count and update valuations',
           assignee: erin.id,
-          dueDate: new Date(now.getFullYear(), now.getMonth(), 18),
+          dueDate: new Date(2025, 8, 18), // September 18
           status: 'IN_PROGRESS',
-          notes: 'Complete physical inventory count and update valuations'
+          order: 1
         }
       });
-      console.log(`✅ Created checklist item: ${betaItem1.title} (Owner: Dave, Assignee: Erin)`);
+      console.log(`✅ Created checklist item: ${betaItem1.title}`);
 
       const betaItem2 = await tx.checklistItem.create({
         data: {
-          monthId: betaMonth.id,
+          checklistId: betaTeamChecklist.id,
           title: 'Tax Provision Calculation',
-          owner: dave.id,
+          description: 'Calculate monthly tax provision and prepare tax entries',
           assignee: erin.id,
-          dueDate: new Date(now.getFullYear(), now.getMonth(), 22),
+          dueDate: new Date(2025, 8, 22), // September 22
           status: 'NOT_STARTED',
-          notes: 'Calculate monthly tax provision and prepare tax entries'
+          order: 2
         }
       });
-      console.log(`✅ Created checklist item: ${betaItem2.title} (Owner: Dave, Assignee: Erin)`);
+      console.log(`✅ Created checklist item: ${betaItem2.title}`);
 
-      // Add more checklist items to test different user assignments
-      const alphaItem4 = await tx.checklistItem.create({
+      // Create personal checklist items
+      const alicePersonalItem1 = await tx.checklistItem.create({
         data: {
-          monthId: alphaMonth.id,
-          title: 'Bank Reconciliation',
-          owner: alice.id,
-          assignee: alice.id, // Alice assigned to her own item
-          dueDate: new Date(now.getFullYear(), now.getMonth(), 12),
+          checklistId: alicePersonalChecklist.id,
+          title: 'Review emails',
+          description: 'Check and respond to important emails',
+          assignee: alice.id,
+          dueDate: null,
           status: 'DONE',
-          notes: 'Monthly bank reconciliation completed'
+          order: 1
         }
       });
-      console.log(`✅ Created checklist item: ${alphaItem4.title} (Owner: Alice, Assignee: Alice)`);
+      console.log(`✅ Created personal item: ${alicePersonalItem1.title}`);
 
-      const alphaItem5 = await tx.checklistItem.create({
+      const alicePersonalItem2 = await tx.checklistItem.create({
         data: {
-          monthId: alphaMonth.id,
-          title: 'Expense Report Review',
-          owner: bob.id,
-          assignee: bob.id, // Bob assigned to his own item
-          dueDate: new Date(now.getFullYear(), now.getMonth(), 10),
-          status: 'DONE',
-          notes: 'Review and approve employee expense reports'
+          checklistId: alicePersonalChecklist.id,
+          title: 'Team meeting preparation',
+          description: 'Prepare agenda and materials for team meeting',
+          assignee: alice.id,
+          dueDate: new Date(2025, 8, 12), // September 12
+          status: 'IN_PROGRESS',
+          order: 2
         }
       });
-      console.log(`✅ Created checklist item: ${alphaItem5.title} (Owner: Bob, Assignee: Bob)`);
+      console.log(`✅ Created personal item: ${alicePersonalItem2.title}`);
 
-      const betaItem3 = await tx.checklistItem.create({
-        data: {
-          monthId: betaMonth.id,
-          title: 'Fixed Asset Depreciation',
-          owner: dave.id,
-          assignee: dave.id, // Dave assigned to his own item
-          dueDate: new Date(now.getFullYear(), now.getMonth(), 8),
-          status: 'DONE',
-          notes: 'Calculate and record monthly depreciation'
-        }
-      });
-      console.log(`✅ Created checklist item: ${betaItem3.title} (Owner: Dave, Assignee: Dave)`);
-
-      console.log('\n✅ Creating tasks (5 per checklist item)...');
-      
-      // Helper function to get random assignee from entity users
-      const getRandomAssignee = (entityId: string) => {
-        if (entityId === alphaCorp.id) {
-          const alphaUsers = [alice.id, bob.id, carol.id];
-          return alphaUsers[Math.floor(Math.random() * alphaUsers.length)];
-        } else {
-          const betaUsers = [dave.id, erin.id];
-          return betaUsers[Math.floor(Math.random() * betaUsers.length)];
-        }
-      };
-
-      // Helper function to get random status
-      const getRandomStatus = () => {
-        const statuses = ['NOT_STARTED', 'IN_PROGRESS', 'DONE'];
-        return statuses[Math.floor(Math.random() * statuses.length)];
-      };
-
-      // Helper function to get user name by ID
-      const getUserName = (userId: string) => {
-        const users = { [alice.id]: 'Alice', [bob.id]: 'Bob', [carol.id]: 'Carol', [dave.id]: 'Dave', [erin.id]: 'Erin' };
-        return users[userId] || 'Unknown';
-      };
-
-      // Create 5 tasks for each checklist item
-      const allChecklistItems = [
-        { item: alphaItem1, title: 'Revenue Recognition Review' },
-        { item: alphaItem2, title: 'Accounts Payable Reconciliation' },
-        { item: alphaItem3, title: 'Financial Statement Preparation' },
-        { item: alphaItem4, title: 'Bank Reconciliation' },
-        { item: alphaItem5, title: 'Expense Report Review' },
-        { item: betaItem1, title: 'Inventory Count and Valuation' },
-        { item: betaItem2, title: 'Tax Provision Calculation' },
-        { item: betaItem3, title: 'Fixed Asset Depreciation' }
-      ];
-
-      for (const { item, title } of allChecklistItems) {
-        console.log(`\n📋 Creating 5 tasks for: ${title}`);
-        
-        // Get the entity ID for this checklist item
-        const entityId = item.monthId === alphaMonth.id ? alphaCorp.id : betaLLC.id;
-        
-        // Create 5 tasks with random assignees and statuses
-        const taskTemplates = [
-          { title: 'Initial review and analysis', dueOffset: 5 },
-          { title: 'Data collection and verification', dueOffset: 8 },
-          { title: 'Documentation and reporting', dueOffset: 12 },
-          { title: 'Quality assurance and validation', dueOffset: 15 },
-          { title: 'Final approval and sign-off', dueOffset: 18 }
-        ];
-
-        for (let i = 0; i < 5; i++) {
-          const template = taskTemplates[i];
-          const assigneeId = getRandomAssignee(entityId);
-          const status = getRandomStatus();
-          const dueDate = new Date(now.getFullYear(), now.getMonth(), template.dueOffset);
-          
-          await tx.task.create({
-            data: {
-              checklistItemId: item.id,
-              title: template.title,
-              assignee: assigneeId,
-              dueDate: dueDate,
-              status: status,
-              notes: `Task ${i + 1} for ${title} - assigned to ${getUserName(assigneeId)}`
-            }
-          });
-          
-          console.log(`  ✅ Task ${i + 1}: ${template.title} (Assignee: ${getUserName(assigneeId)}, Status: ${status})`);
-        }
-      }
+      // Tasks removed - no longer using Task model
     });
 
-    console.log('\n🎉 Enhanced database seeding completed successfully!');
+    console.log('\n🎉 New checklist system seeding completed successfully!');
     console.log('\n📊 Summary:');
     console.log('- 2 Entities: Alpha Corp, Beta LLC');
     console.log('- 5 Users: Alice, Bob, Carol, Dave, Erin');
     console.log('- 5 Memberships with appropriate roles');
-    console.log('- 2 MonthClose records for current month');
-    console.log('- 8 ChecklistItems with proper user assignments:');
-    console.log('  * Alpha Corp: 5 items (Alice owns 3, Bob owns 2)');
-    console.log('  * Beta LLC: 3 items (Dave owns all)');
-    console.log('- 40 Tasks (5 per checklist item) with random assignees');
-    console.log('\n🔐 Role-based permissions test data:');
-    console.log('- EMPLOYEE users (Carol, Erin) can only see their assigned items');
-    console.log('- MANAGER users (Bob) can see all items in their entity');
-    console.log('- ADMIN users (Alice, Dave) can see all items in their entity');
-    console.log('\n🎯 Task assignment highlights:');
-    console.log('- Each checklist item has exactly 5 tasks');
-    console.log('- Tasks are randomly assigned to users within the same entity');
-    console.log('- Task statuses are randomly distributed (NOT_STARTED, IN_PROGRESS, DONE)');
-    console.log('- Due dates are staggered across the month');
+    console.log('- 4 Checklists: 2 Team, 2 Personal');
+    console.log('- 7 Checklist Items with proper assignments');
+    console.log('\n🔐 Login credentials:');
+    console.log('- Alice (Admin): alice@alpha.com / password123');
+    console.log('- Bob (Manager): bob@alpha.com / password123');
+    console.log('- Carol (Employee): carol@alpha.com / password123');
+    console.log('- Dave (Admin): dave@beta.com / password123');
+    console.log('- Erin (Employee): erin@beta.com / password123');
 
   } catch (error) {
     console.error('❌ Seeding failed:', error);

@@ -1,0 +1,3 @@
+# Render Procfile for Agents MVP
+web: npm start
+worker: npm run worker

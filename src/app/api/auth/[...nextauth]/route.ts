@@ -101,7 +101,7 @@ export const authOptions: AuthOptions = {
               },
             },
           },
-        } as any) as any;
+        });
         if (!user) return null;
 
         const isValid = await compare(password, user.passwordHash);
@@ -116,7 +116,7 @@ export const authOptions: AuthOptions = {
           id: user.id, 
           email: user.email, 
           name: user.name || "",
-          memberships: user.memberships.map((m: any) => ({
+          memberships: user.memberships.map((m: { id: string; role: string; entity: { id: string; name: string } }) => ({
             id: m.id,
             role: m.role,
             entity: m.entity,

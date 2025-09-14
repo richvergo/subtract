@@ -1,175 +1,230 @@
-# Project Guidelines
+Tech Stack
 
-## Tech Stack
-- **Frontend:** Next.js (App Router) + TypeScript
-- **Styling:** Tailwind + shadcn/ui
-- **Auth:** NextAuth (Credentials provider, email+password) with multi-entity support
-- **Database:** Prisma (SQLite for dev, Postgres for prod)
-- **Validation:** Zod
-- **File Parsing:** Removed (manual creation only)
-- **Testing:** Vitest (unit/integration) + Playwright (E2E)
+Frontend: Next.js 15 (App Router) + React 19 + TypeScript
 
----
+Styling: Custom CSS classes in globals.css + inline styles (no Tailwind/shadcn for MVP)
 
-## Multi-Entity Architecture
+Data Fetching: SWR for caching and real-time updates
 
-### Entity Management
-- **Entity** = Legal company/organization with isolated data
-- **Multi-Tenancy**: Complete data isolation between entities
-- **Entity Creation**: Only ADMIN users can create entities
-- **Entity Switching**: Users can switch between entities they belong to
+UI Components: Custom components (Sidebar, Buttons, Cards) with inline styles
 
-### Role-Based Access Control (RBAC)
-- **ADMIN**: Can create entities, invite/remove users, manage billing, see all data
-- **MANAGER**: Can see all data within entity, cannot manage users
-- **EMPLOYEE**: Can only see tasks assigned to them
+Auth: NextAuth (credentials provider: email + password)
 
-### Security Rules
-- All API endpoints must check entity access permissions
-- Data queries must be filtered by active entity
-- Session includes user memberships and active entity
-- Role-based UI elements and functionality
+Database: Prisma (SQLite for dev, Postgres for prod)
 
----
+Validation: Zod
 
-## Folder Structure (locked)
-/src/app # App Router pages and API
-/api # Backend endpoints
-  /auth # Auth (register, login, session, switch-entity)
-  /entities # Entity management (create, invite users)
-  /memberships # Membership management (update roles, remove users)
-  /checklist # Checklist management (entity-scoped)
-  /dashboard # Dashboard data (entity-scoped)
-  /tasks # Task management (entity-scoped)
-  /team-members # Team member listing (entity-scoped)
-  /months # Month management (generate, copy)
-/register # Registration page
-/page.tsx # Dashboard (home) with entity switcher
-/layout.tsx # Root layout with sidebar
-/components # UI components
-  Sidebar.tsx # Navigation with entity switcher
-  EntitySwitcher.tsx # Entity selection dropdown
-  LayoutWithSidebar.tsx # Layout wrapper
-  EnhancedDashboardContent.tsx # Dashboard with CRUD, month navigation, team management
-  StatusBadge.tsx # Status indicators
-  StatusSelect.tsx # Status dropdowns
-  Providers.tsx # NextAuth session provider
+Background Jobs: Redis + BullMQ + worker for agent processing/runs
 
-/src/lib # Shared utilities
-db.ts # Prisma client
-auth.ts # Session helper
-permissions.ts # RBAC middleware and helpers
+Testing: Jest (unit/integration) with comprehensive Puppeteer + LLM mocking
 
-/src/schemas # Zod schemas
+Core Concepts
+Agents
 
-/tests # Tests
-/unit
-/integration
-/e2e
+Definition: Repeatable workflows learned from a user recording.
 
-/prisma # Database schema + migrations
+Storage:
 
----
+agent_config = structured DOM actions with metadata
 
-## Data Model Rules
-- **User** → has multiple `Membership` entries across entities
-- **Entity** → legal company/organization with isolated data
-- **Membership** → links users to entities with roles (ADMIN/MANAGER/EMPLOYEE)
-- **MonthClose** → belongs to an entity; represents one accounting month
-- **ChecklistItem** → belongs to a month; represents a high-level close step
-- **Task** → belongs to a checklist item; represents granular work
-- **Constraint:** A checklist item is marked `DONE` only if all its tasks are marked `DONE`
-- **Security:** All data access must be entity-scoped and role-checked
+purpose_prompt = user’s natural language description of the task
 
----
+agent_intents = LLM annotations for each step
 
-## Environment
-- File: `/src/lib/env.ts`
-- Validates required variables:
-  - `DATABASE_URL`
-  - `NEXTAUTH_SECRET`
-  - `NEXTAUTH_URL`
-  - `NODE_ENV`
-- App must crash at startup if missing or invalid.
+States:
 
----
+DRAFT = created but not confirmed
 
-## Error Handling
-- API routes return `application/problem+json` style errors.
-- Never leak stack traces to client.
-- Always provide user-friendly error messages.
-- Include entity access validation in all endpoints.
+ACTIVE = tested + confirmed, can run with parameters
 
----
+Logins
 
-## Naming Conventions
-- **Database models:** PascalCase (`User`, `Entity`, `Membership`, `MonthClose`, `ChecklistItem`, `Task`)
-- **DB fields:** camelCase (`userId`, `entityId`, `dueDate`)
-- **TypeScript code:** camelCase
-- **Files/folders:** kebab-case
-- **Commits:** Conventional commits (`feat:`, `fix:`, `chore:`)
+Definition: Secure vault of credentials + sessions for external systems.
 
----
+Features:
 
-## Testing Strategy
-- **Unit tests (Vitest):**
-  - Zod schemas reject invalid input.
-  - Date utils handle rollovers (Jan 31 → Feb 28).
-  - Checklist item toggles DONE only if all tasks are DONE.
-  - Permission middleware validates roles correctly.
+Per-login refresh/reconnect
 
-- **Integration tests:**
-  - API endpoints handle happy-path + failure cases.
-  - Manual checklist creation and task management.
-  - Checklist item editing (title, assignee, due date, status).
-  - Task creation and management with individual assignees.
-  - Month generation and copying functionality.
-  - Team member listing and role-based ordering.
-  - Cloning rolls due dates and resets statuses.
-  - Entity creation and user invitation flows.
-  - Role-based access control enforcement.
+Status: Active, Needs Reconnect, Disconnected
 
-- **E2E tests (Playwright):**
-  - Golden path: register → login → auto-create month → add checklist item → add tasks → update statuses → assign users → dashboard reflects progress.
-  - Month navigation: switch between months, verify month title display, test month generation.
-  - Checklist editing: edit checklist items, test quick status changes, verify team member dropdowns.
-  - Task management: create tasks with assignees, edit task status, delete tasks.
-  - Multi-entity path: create entity → invite users → switch entities → verify data isolation.
-  - Role-based path: test ADMIN/MANAGER/EMPLOYEE permissions.
-  - Negative tests: invalid login, unauthorized access, cross-entity access attempts.
+MFA/2FA handled at reconnect time
 
-- **Fixtures:**
-  - Test data for manual checklist creation.
-  - Sample entities, users, and memberships for testing.
-  - Role-based test scenarios.
+Security: AES-256 encryption, session reuse prioritized
 
-- **CI Gates:**
-  - Lint ✅
-  - Typecheck ✅
-  - Unit tests ✅
-  - Integration tests ✅
-  - Golden path E2E ✅
-  - Multi-entity E2E ✅
-  - Build ✅
+Runs
 
-- **Rule:** No new feature is "done" unless it has a test.
+Definition: An execution of an agent with specific parameters.
 
----
+Features:
 
-## Git & Version Control
-- **Branching:** 
-  - `main` = stable working branch.
-  - Feature branches for all new work.
-- **Commits:** 
-  - Small, frequent commits with descriptive messages.
-- **Tags:** 
-  - Tag major milestones (e.g. `auth-working`, `multi-entity-working`).
+Uses agent_config to replay steps
 
----
+If selectors fail, falls back to agent_intents + LLM repair
 
-## Do-Not-Do (MVP)
-- ❌ Notifications/reminders
-- ❌ Slack/email integrations
-- ❌ PDF export
-- ❌ Mobile app
-- ❌ Cross-entity reporting or analytics
+Captures logs + screenshots
+
+Stores params_used for auditability
+
+Golden Path UX
+
+User clicks Create Agent → opens recording page
+
+User records workflow, enters purpose prompt, saves agent
+
+Backend processes in single step → generates structured steps + intent annotations via /api/agents/record
+
+System detects domains → prompts for logins if required
+
+Agent saved in DRAFT until tested
+
+User runs a test → reviews logs/screenshots → confirms
+
+Agent marked ACTIVE → available for repeat runs with parameters
+
+Folder Structure
+/src
+  /app
+    /agents           # Agent pages (list, detail, create)
+    /logins           # Login pages
+    /api              # API routes
+      /agents         # Agent CRUD, create-from-recording, runs
+      /logins         # Login CRUD, check/reconnect
+      /agent-runs     # Run confirmation/rejection
+    /register         # User registration
+    layout.tsx        # Root layout with sidebar
+    page.tsx          # Dashboard
+  /components         # Shared UI (sidebar, modals, forms)
+  /lib                # DB client, auth, helpers
+  /schemas            # Zod validation schemas
+/tests                # Unit, integration, and E2E tests
+/prisma               # DB schema + migrations
+
+Data Model Rules
+
+User → has multiple Agents and Logins
+
+Agent → belongs to a user; stores config, intents, purpose prompt, status
+
+Login → belongs to a user; stores encrypted credentials and session info
+
+AgentRun → belongs to an agent; stores params, logs, screenshot, status
+
+Environment
+
+File: /src/lib/env.ts
+
+Validates required variables:
+
+DATABASE_URL
+
+NEXTAUTH_SECRET
+
+NEXTAUTH_URL
+
+NODE_ENV
+
+INTERNAL_RUNNER_TOKEN
+
+App must crash at startup if missing or invalid.
+
+Error Handling
+
+APIs return application/problem+json errors.
+
+Never leak stack traces to client.
+
+Errors must include a user-friendly message and any missing prerequisites (e.g. “Login required for domain X”).
+
+Naming Conventions
+
+DB models: PascalCase (User, Agent, Login, AgentRun)
+
+DB fields: camelCase (agentConfig, purposePrompt, sessionData)
+
+TS code: camelCase
+
+Files/folders: kebab-case
+
+Commits: Conventional commits (feat:, fix:, chore:)
+
+Testing Strategy
+
+Unit Tests (Jest):
+
+Zod schemas reject invalid input
+
+Agent recorder produces metadata-rich steps
+
+LLM annotator generates intents correctly
+
+Runner executes selectors or falls back to repair
+
+Integration Tests:
+
+API endpoints (agents, logins, runs) handle happy + failure paths
+
+Agent creation with/without login required
+
+Run blocked if missing login
+
+Run repair triggered if selector fails
+
+Mocking Strategy:
+
+Puppeteer: Comprehensive mocking of browser automation
+
+LLM Service: Mocked responses for intent generation
+
+Redis Queue: Mocked for background job processing
+
+CI Gates:
+
+Lint ✅
+
+Typecheck ✅
+
+Unit tests ✅
+
+Integration tests ✅
+
+Build ✅
+
+Areas Needing Product Decisions:
+
+Session Reuse / 2FA: Current = manual reconnect; confirm if automatic re-auth desired
+
+Agent Creation UX: Current = single-step; confirm if UX should later split
+
+Testing Strategy: Current = mocks only; confirm if real browser integration tests needed
+
+Error Handling: Current = basic errors; confirm if retry logic required
+
+Git & Version Control
+
+Branching:
+
+main = stable
+
+Feature branches for all new work
+
+Commits:
+
+Small, descriptive, conventional commit messages
+
+Tags:
+
+Tag major milestones (e.g. agents-mvp-ready)
+
+Do-Not-Do (MVP)
+
+❌ Notifications/reminders
+
+❌ Slack/email integrations
+
+❌ Scheduling/recurrence (belongs to Tasks section, not Agents MVP)
+
+❌ Mobile app
+
+❌ Cross-user agent sharing
+
+✅ This version removes all the old checklist/month-close references and reframes everything around Agents, Logins, Runs — the real MVP you’re building.

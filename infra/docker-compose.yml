@@ -1,0 +1,82 @@
+version: "3.9"
+
+services:
+  # Next.js Frontend + API
+  app:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=postgresql://app:password@db:5432/agents
+      - REDIS_URL=redis://redis:6379/0
+      - ENCRYPTION_KEY_BASE64=${ENCRYPTION_KEY_BASE64}
+      - INTERNAL_RUNNER_TOKEN=${INTERNAL_RUNNER_TOKEN}
+      - FILE_STORAGE_DIR=/data/agent_outputs
+      - NEXTAUTH_URL=http://localhost:3000
+      - NEXTAUTH_SECRET=${NEXTAUTH_SECRET}
+    volumes:
+      - agent_data:/data
+    depends_on:
+      - db
+      - redis
+    restart: unless-stopped
+
+  # Puppeteer Worker
+  worker:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile.worker
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=postgresql://app:password@db:5432/agents
+      - REDIS_URL=redis://redis:6379/0
+      - ENCRYPTION_KEY_BASE64=${ENCRYPTION_KEY_BASE64}
+      - INTERNAL_RUNNER_TOKEN=${INTERNAL_RUNNER_TOKEN}
+      - FILE_STORAGE_DIR=/data/agent_outputs
+    volumes:
+      - agent_data:/data
+    depends_on:
+      - app
+      - redis
+    restart: unless-stopped
+
+  # PostgreSQL Database
+  db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: agents
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U app -d agents"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis Queue
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+volumes:
+  postgres_data:
+  redis_data:
+  agent_data:

@@ -1,11 +1,11 @@
 # 📁 File Structure Reference
 
-This document serves as a reference for the correct file structure of the checklist application. **DO NOT** create duplicate files or directories that conflict with this structure.
+This document serves as a reference for the correct file structure of the vergo AI agent automation platform. **DO NOT** create duplicate files or directories that conflict with this structure.
 
 ## 🏗️ Root Directory Structure
 
 ```
-checklist_app/
+vergo-automation-platform/
 ├── .env                          # Environment variables (DATABASE_URL, NEXTAUTH_SECRET, NEXTAUTH_URL)
 ├── .gitignore                    # Git ignore rules
 ├── eslint.config.mjs             # ESLint configuration
@@ -44,52 +44,32 @@ checklist_app/
 │   ├── app/                      # Next.js App Router
 │   │   ├── api/                  # API routes
 │   │   │   ├── auth/
-│   │   │   │   ├── [...nextauth]/
-│   │   │   │   │   └── route.ts
-│   │   │   │   └── switch-entity/
+│   │   │   │   └── [...nextauth]/
 │   │   │   │       └── route.ts
-│   │   │   ├── checklist/
+│   │   │   ├── agents/
 │   │   │   │   ├── [id]/
-│   │   │   │   │   └── route.ts
+│   │   │   │   │   ├── route.ts
+│   │   │   │   │   ├── run/route.ts
+│   │   │   │   │   └── runs/route.ts
+│   │   │   │   ├── create-from-recording/route.ts
 │   │   │   │   └── route.ts
-│   │   │   ├── dashboard/
-│   │   │   │   └── route.ts
-│   │   │   ├── entities/
+│   │   │   ├── agent-recordings/route.ts
+│   │   │   ├── internal/
+│   │   │   │   └── agents/
+│   │   │   │       └── [id]/
+│   │   │   │           └── processing-complete/route.ts
+│   │   │   ├── logins/
 │   │   │   │   ├── [id]/
-│   │   │   │   │   └── invite/
-│   │   │   │   │       └── route.ts
+│   │   │   │   │   ├── route.ts
+│   │   │   │   │   └── check/route.ts
 │   │   │   │   └── route.ts
-│   │   │   ├── memberships/
-│   │   │   │   └── [id]/
-│   │   │   │       └── route.ts
-│   │   │   ├── months/
-│   │   │   │   ├── copy/
-│   │   │   │   │   └── route.ts
-│   │   │   │   ├── generate/
-│   │   │   │   │   └── route.ts
-│   │   │   │   └── route.ts
-│   │   │   ├── register/
-│   │   │   │   └── route.ts
-│   │   │   ├── team-members/
-│   │   │   │   └── route.ts
-│   │   │   └── tasks/
-│   │   │       ├── [id]/
-│   │   │       │   └── route.ts
-│   │   │       └── route.ts
-│   │   ├── components/           # React components
-│   │   │   ├── DashboardContent.tsx
-│   │   │   ├── EnhancedDashboardContent.tsx  # Main dashboard with CRUD, month navigation, team management
-│   │   │   ├── EntitySwitcher.tsx
-│   │   │   ├── LayoutWithSidebar.tsx
-│   │   │   ├── Providers.tsx
-│   │   │   ├── Sidebar.tsx
-│   │   │   ├── StatusBadge.tsx
-│   │   │   └── StatusSelect.tsx
-│   │   ├── documents/            # Documents page
-│   │   │   └── page.tsx
+│   │   │   └── register/route.ts
+│   │   ├── agents/               # Agent management pages
+│   │   │   ├── [id]/page.tsx     # Agent detail page
+│   │   │   └── page.tsx          # Agents list page
+│   │   ├── logins/               # Login management pages
+│   │   │   └── page.tsx          # Logins list page
 │   │   ├── register/             # Registration page
-│   │   │   └── page.tsx
-│   │   ├── tasks/                # Tasks page
 │   │   │   └── page.tsx
 │   │   ├── favicon.ico
 │   │   ├── globals.css           # Global styles
@@ -100,9 +80,17 @@ checklist_app/
 │       ├── auth.ts               # Authentication helpers
 │       ├── db.ts                 # Prisma client
 │       ├── env.ts                # Environment validation
-│       └── permissions.ts        # RBAC middleware and helpers
+│       ├── agent-executor.ts     # Puppeteer execution engine
+│       ├── llm-service.ts        # LLM integration for intent generation
+│       ├── queue.ts              # Background job processing
+│       ├── encryption.ts         # Credential encryption/decryption
+│       └── schemas/
+│           └── agents.ts         # Zod validation schemas
 │
-└── tests/                        # Test files (empty - no fixtures needed)
+└── tests/                        # Test files
+    ├── test_enhanced_agents_simple.test.ts
+    ├── test_recording_workflow_simple.test.ts
+    └── test_llm_service.test.ts
 ```
 
 ## 🚫 **CRITICAL: DO NOT CREATE THESE**
@@ -115,6 +103,7 @@ checklist_app/
 ### ❌ Incorrect File Locations
 - `src/app/api/auth/register/route.ts` (should be `src/app/api/register/route.ts`)
 - `src/app/api/register/page.tsx` (should be `src/app/register/page.tsx`)
+- Missing agent recording endpoints in API structure
 
 ### ❌ Test Files in Production
 - `src/app/test-*/` directories

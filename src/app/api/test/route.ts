@@ -4,20 +4,20 @@ import { db } from '@/lib/db';
 export async function GET() {
   try {
     // Test if db.task exists
-    const tasks = await db.task.findMany({
-      take: 1
-    });
+    // const tasks = await db.task.findMany({
+    //   take: 1
+    // });
     
     return NextResponse.json({ 
       success: true, 
-      taskCount: tasks.length,
-      hasTaskMethod: 'task' in prisma 
+      taskCount: 0,
+      hasTaskMethod: false // 'task' in db
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     return NextResponse.json({ 
       success: false, 
-      error: error.message,
-      hasTaskMethod: 'task' in prisma 
+      error: (error as Error).message,
+      hasTaskMethod: false // 'task' in db
     });
   }
 }

@@ -14,6 +14,11 @@ model User {
   name          String?
   createdAt     DateTime  @default(now())
   memberships   Membership[]
+  
+  // Agents relations
+  logins        Login[]
+  agents        Agent[]
+  recordings    AgentRecording[]
 }
 
 model Entity {
@@ -21,7 +26,6 @@ model Entity {
   name        String
   createdAt   DateTime      @default(now())
   memberships Membership[]
-  months      MonthClose[]
 }
 
 model Membership {
@@ -37,53 +41,131 @@ model Membership {
 }
 
 enum Role {
-  ADMIN       // owner of entity, can invite/remove, manage billing
-  MANAGER     // can see everything, cannot manage users
-  EMPLOYEE    // can only see assigned items
+  ADMIN
+  MANAGER
+  EMPLOYEE
 }
 
-model MonthClose {
-  id        String         @id @default(cuid())
-  entityId  String
-  label     String
-  startDate DateTime
-  endDate   DateTime
-  createdAt DateTime       @default(now())
-
-  entity    Entity         @relation(fields: [entityId], references: [id])
-  checklistItems ChecklistItem[]
-
-  @@unique([entityId, label])
+enum LoginStatus {
+  UNKNOWN         // Never tested
+  ACTIVE          // Session is valid and ready to use
+  NEEDS_RECONNECT // Requires user interaction (2FA, re-authentication)
+  DISCONNECTED    // Session expired or invalid
+  BROKEN          // Last test failed
+  EXPIRED         // Credentials expired
+  SUSPENDED       // Account suspended
 }
 
-model ChecklistItem {
-  id        String   @id @default(cuid())
-  monthId   String
-  title     String
-  owner     String?
-  assignee  String?
-  dueDate   DateTime?
-  status    Status   @default(NOT_STARTED)
-  notes     String?
+// Login credentials for automation agents
+model Login {
+  id              String      @id @default(cuid())
+  name            String
+  loginUrl        String      // The URL where the login page is located
+  username        String      // Encrypted
+  password        String?     // Encrypted
+  oauthToken      String?     // Encrypted
+  // Generic login configuration
+  templateId      String?     // Predefined template ID
+  customConfig    String?     // JSON configuration for custom login flows
+  // Session management
+  sessionData     String?     // Encrypted cookies/tokens from successful login
+  sessionExpiry   DateTime?   // When the session expires
+  status          LoginStatus @default(UNKNOWN)
+  lastCheckedAt   DateTime?   // Last time login was tested
+  lastSuccessAt   DateTime?   // Last successful login
+  lastFailureAt   DateTime?   // Last failed login attempt
+  failureCount    Int         @default(0) // Consecutive failures
+  errorMessage    String?     // Last error message
+  ownerId         String
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
 
-  month     MonthClose @relation(fields: [monthId], references: [id])
-  tasks     Task[]
+  owner       User      @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  agentLogins AgentLogin[]
 }
 
-model Task {
-  id              String   @id @default(cuid())
-  checklistItemId String
-  title           String
-  assignee        String?
-  dueDate         DateTime?
-  status          Status   @default(NOT_STARTED)
-  notes           String?
+// Automation agents
+model Agent {
+  id                String      @id @default(cuid())
+  name              String
+  description       String?
+  purposePrompt     String      // User's natural language description of what the agent does
+  agentConfig       String?     // JSON configuration (structured actions) - nullable for processing
+  agentIntents      String?     // JSON intents (LLM annotations)
+  status            AgentStatus @default(DRAFT)
+  processingStatus  String      @default("processing") // processing|ready|failed
+  processingProgress Int?       // 0..100
+  recordingPath     String?     // Path to uploaded recording
+  ownerId           String
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
 
-  checklistItem   ChecklistItem @relation(fields: [checklistItemId], references: [id])
+  owner       User        @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  agentLogins AgentLogin[]
+  agentRuns   AgentRun[]
 }
 
-enum Status {
-  NOT_STARTED
-  IN_PROGRESS
-  DONE
+// Many-to-many relationship between agents and logins
+model AgentLogin {
+  id        String @id @default(cuid())
+  agentId   String
+  loginId   String
+
+  agent     Agent  @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  login     Login  @relation(fields: [loginId], references: [id], onDelete: Cascade)
+
+  @@unique([agentId, loginId])
+}
+
+// Agent execution runs
+model AgentRun {
+  id          String      @id @default(cuid())
+  agentId     String
+  status      RunStatus   @default(PENDING)
+  startedAt   DateTime    @default(now())
+  finishedAt  DateTime?
+  result      String?     // JSON result data
+  error       String?     // Error message if failed
+  logs        String?     // JSON logs data
+  screenshot  String?     // Base64 screenshot or URL
+  prompt      String?     // User prompt for live runs
+  requiresConfirmation Boolean @default(false)
+  confirmationData     String?   // JSON data for confirmation
+  confirmedAt          DateTime?
+  confirmedBy          String?
+  userConfirmed        Boolean   @default(false)
+  userFeedback         String?   // User feedback on rejection
+
+  agent       Agent       @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  @@index([agentId, startedAt])
+}
+
+enum AgentStatus {
+  DRAFT
+  ACTIVE
+  INACTIVE
+}
+
+enum RunStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+  CANCELLED
+  REQUIRES_CONFIRMATION
+  CONFIRMED
+  REJECTED
+}
+
+// Agent recording uploads
+model AgentRecording {
+  id           String   @id @default(cuid())
+  storage_path String   // Path where the recording is stored
+  mime_type    String?  // MIME type of the recording
+  size         BigInt?  // File size in bytes
+  created_by   String   // User who uploaded the recording
+  created_at   DateTime @default(now())
+
+  createdBy    User     @relation(fields: [created_by], references: [id], onDelete: Cascade)
 }

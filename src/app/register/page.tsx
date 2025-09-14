@@ -60,34 +60,65 @@ export default function RegisterPage() {
   }
 
   return (
-    <div
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        justifyContent: "center",
-        height: "100vh",
-        backgroundColor: "#f5f5f5",
-      }}
-    >
-      <div
-        style={{
-          backgroundColor: "white",
-          padding: "40px",
-          borderRadius: "10px",
-          boxShadow: "0 4px 6px rgba(0, 0, 0, 0.1)",
-          width: "400px",
-          maxWidth: "90vw",
-        }}
-      >
-        <img
-          src="/logo.jpg"
-          alt="App Logo"
-          style={{ width: "120px", marginBottom: "30px", display: "block", margin: "0 auto 30px auto" }}
-        />
+    <div style={{
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      minHeight: "100vh",
+      backgroundColor: "#f9f9f9",
+      padding: "16px"
+    }}>
+      <div style={{
+        background: "white",
+        borderRadius: "12px",
+        boxShadow: "0 4px 6px rgba(0, 0, 0, 0.1)",
+        width: "100%",
+        maxWidth: "400px",
+        padding: "32px"
+      }}>
+        {/* Logo and Header */}
+        <div style={{ textAlign: "center", marginBottom: "32px" }}>
+          <div style={{
+            width: "64px",
+            height: "64px",
+            background: "black",
+            borderRadius: "12px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            margin: "0 auto 16px auto"
+          }}>
+            <img
+              src="/logo.jpg"
+              alt="App Logo"
+              style={{ width: "48px", height: "48px", borderRadius: "8px" }}
+            />
+          </div>
+          <h1 style={{ 
+            fontSize: "24px", 
+            fontWeight: "700", 
+            margin: "0 0 8px 0",
+            color: "#333"
+          }}>
+            Welcome to vergo
+          </h1>
+          <p style={{ 
+            color: "#666", 
+            margin: 0,
+            fontSize: "14px"
+          }}>
+            Sign in to your account or create a new one
+          </p>
+        </div>
 
-        {/* Toggle Buttons */}
-        <div style={{ display: "flex", marginBottom: "30px" }}>
+        {/* Tab Navigation */}
+        <div style={{
+          display: "flex",
+          marginBottom: "24px",
+          borderRadius: "8px",
+          overflow: "hidden",
+          border: "1px solid #ddd"
+        }}>
           <button
             type="button"
             onClick={() => setIsLogin(false)}
@@ -98,8 +129,9 @@ export default function RegisterPage() {
               color: !isLogin ? "white" : "#333",
               border: "none",
               cursor: "pointer",
-              fontSize: "16px",
-              fontWeight: "bold",
+              fontSize: "14px",
+              fontWeight: "500",
+              transition: "all 0.2s ease"
             }}
           >
             Sign Up
@@ -114,103 +146,273 @@ export default function RegisterPage() {
               color: isLogin ? "white" : "#333",
               border: "none",
               cursor: "pointer",
-              fontSize: "16px",
-              fontWeight: "bold",
+              fontSize: "14px",
+              fontWeight: "500",
+              transition: "all 0.2s ease"
             }}
           >
             Sign In
           </button>
         </div>
 
-        <form
-          onSubmit={isLogin ? handleLogin : handleRegister}
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            gap: "15px",
-          }}
-        >
-          {!isLogin && (
-            <input
-              type="text"
-              placeholder="Name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              style={{ 
-                padding: "12px", 
-                fontSize: "16px", 
-                border: "1px solid #ddd",
-                borderRadius: "5px",
-                outline: "none"
+        {/* Forms */}
+        {!isLogin ? (
+          <form onSubmit={handleRegister} style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+            <div>
+              <label style={{ 
+                display: "block", 
+                marginBottom: "6px", 
+                fontWeight: "500", 
+                fontSize: "14px",
+                color: "#333"
+              }}>
+                Name
+              </label>
+              <input
+                type="text"
+                placeholder="Enter your name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                required
+                style={{
+                  width: "100%",
+                  padding: "12px",
+                  border: "1px solid #ddd",
+                  borderRadius: "6px",
+                  fontSize: "14px",
+                  outline: "none",
+                  transition: "border-color 0.2s ease"
+                }}
+                onFocus={(e) => {
+                  e.target.style.borderColor = "#007bff"
+                  e.target.style.boxShadow = "0 0 0 3px rgba(0, 123, 255, 0.1)"
+                }}
+                onBlur={(e) => {
+                  e.target.style.borderColor = "#ddd"
+                  e.target.style.boxShadow = "none"
+                }}
+              />
+            </div>
+            <div>
+              <label style={{ 
+                display: "block", 
+                marginBottom: "6px", 
+                fontWeight: "500", 
+                fontSize: "14px",
+                color: "#333"
+              }}>
+                Email
+              </label>
+              <input
+                type="email"
+                placeholder="Enter your email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+                style={{
+                  width: "100%",
+                  padding: "12px",
+                  border: "1px solid #ddd",
+                  borderRadius: "6px",
+                  fontSize: "14px",
+                  outline: "none",
+                  transition: "border-color 0.2s ease"
+                }}
+                onFocus={(e) => {
+                  e.target.style.borderColor = "#007bff"
+                  e.target.style.boxShadow = "0 0 0 3px rgba(0, 123, 255, 0.1)"
+                }}
+                onBlur={(e) => {
+                  e.target.style.borderColor = "#ddd"
+                  e.target.style.boxShadow = "none"
+                }}
+              />
+            </div>
+            <div>
+              <label style={{ 
+                display: "block", 
+                marginBottom: "6px", 
+                fontWeight: "500", 
+                fontSize: "14px",
+                color: "#333"
+              }}>
+                Password
+              </label>
+              <input
+                type="password"
+                placeholder="Minimum 6 characters"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                minLength={6}
+                style={{
+                  width: "100%",
+                  padding: "12px",
+                  border: "1px solid #ddd",
+                  borderRadius: "6px",
+                  fontSize: "14px",
+                  outline: "none",
+                  transition: "border-color 0.2s ease"
+                }}
+                onFocus={(e) => {
+                  e.target.style.borderColor = "#007bff"
+                  e.target.style.boxShadow = "0 0 0 3px rgba(0, 123, 255, 0.1)"
+                }}
+                onBlur={(e) => {
+                  e.target.style.borderColor = "#ddd"
+                  e.target.style.boxShadow = "none"
+                }}
+              />
+            </div>
+            <button
+              type="submit"
+              disabled={loading}
+              style={{
+                padding: "12px",
+                fontSize: "14px",
+                fontWeight: "500",
+                backgroundColor: loading ? "#ccc" : "#007bff",
+                color: "white",
+                border: "none",
+                cursor: loading ? "not-allowed" : "pointer",
+                borderRadius: "6px",
+                transition: "background-color 0.2s ease"
               }}
-            />
-          )}
-          <input
-            type="email"
-            placeholder="Email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            style={{ 
-              padding: "12px", 
-              fontSize: "16px", 
-              border: "1px solid #ddd",
-              borderRadius: "5px",
-              outline: "none"
-            }}
-          />
-          <input
-            type="password"
-            placeholder={isLogin ? "Password" : "Password (min 6 characters)"}
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            style={{ 
-              padding: "12px", 
-              fontSize: "16px", 
-              border: "1px solid #ddd",
-              borderRadius: "5px",
-              outline: "none"
-            }}
-          />
-          <button
-            type="submit"
-            disabled={loading}
-            style={{
-              padding: "12px",
-              fontSize: "16px",
-              backgroundColor: loading ? "#ccc" : "#007bff",
-              color: "white",
-              border: "none",
-              cursor: loading ? "not-allowed" : "pointer",
-              borderRadius: "5px",
-              fontWeight: "bold",
-            }}
-          >
-            {loading ? "Loading..." : (isLogin ? "Sign In" : "Sign Up")}
-          </button>
-        </form>
-
-        {message && (
-          <p style={{ 
-            marginTop: "20px", 
-            textAlign: "center",
-            color: message.includes("✅") ? "#28a745" : "#dc3545",
-            fontWeight: "bold"
-          }}>
-            {message}
-          </p>
+            >
+              {loading ? "Creating Account..." : "Create Account"}
+            </button>
+          </form>
+        ) : (
+          <form onSubmit={handleLogin} style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+            <div>
+              <label style={{ 
+                display: "block", 
+                marginBottom: "6px", 
+                fontWeight: "500", 
+                fontSize: "14px",
+                color: "#333"
+              }}>
+                Email
+              </label>
+              <input
+                type="email"
+                placeholder="Enter your email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+                style={{
+                  width: "100%",
+                  padding: "12px",
+                  border: "1px solid #ddd",
+                  borderRadius: "6px",
+                  fontSize: "14px",
+                  outline: "none",
+                  transition: "border-color 0.2s ease"
+                }}
+                onFocus={(e) => {
+                  e.target.style.borderColor = "#007bff"
+                  e.target.style.boxShadow = "0 0 0 3px rgba(0, 123, 255, 0.1)"
+                }}
+                onBlur={(e) => {
+                  e.target.style.borderColor = "#ddd"
+                  e.target.style.boxShadow = "none"
+                }}
+              />
+            </div>
+            <div>
+              <label style={{ 
+                display: "block", 
+                marginBottom: "6px", 
+                fontWeight: "500", 
+                fontSize: "14px",
+                color: "#333"
+              }}>
+                Password
+              </label>
+              <input
+                type="password"
+                placeholder="Enter your password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                style={{
+                  width: "100%",
+                  padding: "12px",
+                  border: "1px solid #ddd",
+                  borderRadius: "6px",
+                  fontSize: "14px",
+                  outline: "none",
+                  transition: "border-color 0.2s ease"
+                }}
+                onFocus={(e) => {
+                  e.target.style.borderColor = "#007bff"
+                  e.target.style.boxShadow = "0 0 0 3px rgba(0, 123, 255, 0.1)"
+                }}
+                onBlur={(e) => {
+                  e.target.style.borderColor = "#ddd"
+                  e.target.style.boxShadow = "none"
+                }}
+              />
+            </div>
+            <button
+              type="submit"
+              disabled={loading}
+              style={{
+                padding: "12px",
+                fontSize: "14px",
+                fontWeight: "500",
+                backgroundColor: loading ? "#ccc" : "#007bff",
+                color: "white",
+                border: "none",
+                cursor: loading ? "not-allowed" : "pointer",
+                borderRadius: "6px",
+                transition: "background-color 0.2s ease"
+              }}
+            >
+              {loading ? "Signing In..." : "Sign In"}
+            </button>
+          </form>
         )}
 
-        {/* Quick Test Credentials */}
-        <div style={{ 
-          marginTop: "30px", 
-          padding: "15px", 
-          backgroundColor: "#f8f9fa", 
-          borderRadius: "5px",
+        {/* Message */}
+        {message && (
+          <div style={{
+            marginTop: "20px",
+            padding: "12px",
+            borderRadius: "6px",
+            backgroundColor: message.includes("✅") ? "#d4edda" : "#f8d7da",
+            border: `1px solid ${message.includes("✅") ? "#c3e6cb" : "#f5c6cb"}`,
+            color: message.includes("✅") ? "#155724" : "#721c24",
+            fontSize: "14px",
+            fontWeight: "500"
+          }}>
+            {message}
+          </div>
+        )}
+
+        {/* Test Credentials */}
+        <div style={{
+          marginTop: "24px",
+          padding: "16px",
+          backgroundColor: "#f8f9fa",
+          borderRadius: "6px",
           fontSize: "14px"
         }}>
-          <p style={{ margin: "0 0 10px 0", fontWeight: "bold" }}>Test Credentials:</p>
-          <p style={{ margin: "0 0 5px 0" }}>Email: test@example.com</p>
-          <p style={{ margin: "0" }}>Password: secret123</p>
+          <h4 style={{ 
+            fontWeight: "500", 
+            margin: "0 0 8px 0",
+            color: "#333"
+          }}>
+            Test Credentials:
+          </h4>
+          <div style={{ color: "#666" }}>
+            <p style={{ margin: "0 0 4px 0" }}>
+              <strong>Email:</strong> test@example.com
+            </p>
+            <p style={{ margin: 0 }}>
+              <strong>Password:</strong> secret123
+            </p>
+          </div>
         </div>
       </div>
     </div>

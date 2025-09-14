@@ -1,144 +1,138 @@
-# Test Plan
+# Test Plan - AI Agents Platform
 
-## Unit Tests (Vitest)
+## Unit Tests (Jest)
 
-- **Auth schemas**  
-  - Reject invalid emails and short passwords.  
+- **Agent Configuration Schemas**  
+  - Validate agent config with rich DOM metadata
+  - Handle nullable metadata fields correctly
+  - Store and retrieve metadata in database
 
-- **Date utilities**  
-  - Rollover edge cases (Jan 31 → Feb 28, etc).  
+- **LLM Service Integration**  
+  - Generate intent annotations for workflow steps
+  - Repair selectors using LLM when automation fails
+  - Handle LLM API errors gracefully
 
-- **Checklist/Task hierarchy**  
-  - Checklist item marked DONE only if all tasks are DONE.  
-  - Checklist reverts to OPEN if a task is reopened.  
+- **Agent Executor**  
+  - Execute agents with primary selectors successfully
+  - Fallback to LLM repair when selectors fail
+  - Log repair attempts with confidence scores
+  - Update metadata with repaired selectors
 
-- **Manual checklist creation**  
-  - Checklist items can be created with required fields.  
-  - Tasks can be added to checklist items.  
+- **Recording Processing**  
+  - Extract workflow steps from uploaded recordings
+  - Generate enriched metadata for each action
+  - Process recordings in background jobs
 
-- **Permission middleware**  
-  - Role validation (ADMIN, MANAGER, EMPLOYEE).  
-  - Entity access validation.  
-  - Cross-entity access prevention.  
+- **Authentication & Authorization**  
+  - Validate user sessions and permissions
+  - Secure credential encryption/decryption
+  - Owner-only access to agents and logins  
 
 ---
 
 ## Integration Tests
 
-- **Registration API**  
-  - Creates new user with hashed password.  
-  - Rejects duplicate email.  
+- **User Registration & Authentication**  
+  - Creates new user with hashed password
+  - Rejects duplicate email
+  - Valid credentials → session created
+  - Invalid credentials → 401
 
-- **Login API**  
-  - Valid credentials → session created with memberships.  
-  - Invalid credentials → 401.  
-  - Session includes active entity.  
+- **Agent Recording Pipeline**  
+  - `POST /api/agent-recordings` → upload recording file
+  - `POST /api/agents/create-from-recording` → create agent from recording
+  - Background processing updates agent status
+  - `POST /api/internal/agents/[id]/processing-complete` → internal status update
 
-- **Entity Management APIs**  
-  - `POST /api/entities` → creates entity (Admin only).  
-  - `POST /api/entities/[id]/invite` → invites user (Admin only).  
-  - `PATCH /api/memberships/[id]` → updates role (Admin only).  
-  - `DELETE /api/memberships/[id]` → removes user (Admin only).  
+- **Agent Management APIs**  
+  - `GET /api/agents` → list agents with enriched metadata
+  - `POST /api/agents` → create agent with purpose prompt
+  - `GET /api/agents/[id]` → get agent details with config and intents
+  - `PUT /api/agents/[id]` → update agent configuration
+  - `DELETE /api/agents/[id]` → delete agent and runs
 
-- **Entity Switching**  
-  - `POST /api/auth/switch-entity` → switches active entity.  
-  - Validates user has access to target entity.  
+- **Agent Execution APIs**  
+  - `POST /api/agents/[id]/run` → execute agent with fallback repair
+  - `GET /api/agents/[id]/runs` → get execution history with repair logs
+  - Two-stage execution (primary + fallback repair)
+  - LLM selector repair integration
 
-- **Checklist CRUD (Entity-Scoped)**  
-  - Create, read, update, delete checklist items within entity.  
-  - Create, read, update, delete tasks within checklist items.  
-  - Admin can edit checklist items (title, assignee, due date, status).  
-  - Quick status changes for checklist items and tasks.  
-  - Data isolation between entities.  
+- **Login Management APIs**  
+  - `GET /api/logins` → list logins with masked credentials
+  - `POST /api/logins` → create login with encrypted storage
+  - `GET /api/logins/[id]/check` → test login connection
+  - `PUT /api/logins/[id]` → update encrypted credentials
+  - `DELETE /api/logins/[id]` → delete login credentials
 
-- **Dashboard API (Entity-Scoped)**  
-  - `GET /api/dashboard` → returns data for active entity only.  
-  - Auto-creates current month for entity if missing.  
-  - Role-based data filtering (Employees see only assigned tasks).  
-
-- **Month management (Entity-Scoped)**  
-  - `POST /api/months` → creates month if missing for entity.  
-  - `GET /api/months/:id/checklist` → only returns entity's items.  
-  - `POST /api/months/generate` → ensures all 12 months exist for current year.  
-  - `POST /api/months/copy` → copies checklist items and tasks from previous month.  
-
-- **Clone month (Entity-Scoped)**  
-  - Copies checklist + tasks within same entity.  
-  - Resets statuses to OPEN.  
-  - Rolls due dates forward.  
-
-- **Team Management (Entity-Scoped)**  
-  - `GET /api/team-members` → returns team members for active entity.  
-  - Role-based ordering (ADMIN, MANAGER, EMPLOYEE).  
-  - Used for assignee dropdowns in forms.
-
-- **Export CSV (Entity-Scoped)**  
-  - Includes both checklist items and tasks for active entity.  
-  - Headers: `Checklist Item, Task, Assignee, Due Date, Status, Notes`.  
+- **Security & Data Isolation**  
+  - Users can only access their own agents and logins
+  - All API endpoints validate ownership
+  - Credential encryption/decryption works correctly
+  - No cross-user data access  
 
 ---
 
 ## E2E Tests (Playwright)
 
-**Multi-Entity Golden Path**  
-1. Register an admin user.  
-2. Login → system shows no entities message.  
-3. Create first entity (Admin only).  
-4. System auto-creates current month for entity.  
-5. Add first checklist item manually with assignee from team dropdown.  
-6. Add tasks to the checklist item with individual assignees.  
-7. Mark all but one task DONE → checklist item remains IN_PROGRESS.  
-8. Mark last task DONE → checklist item moves to DONE.  
-9. Edit checklist item (title, assignee, due date, status).  
-10. Use quick status changes for tasks.  
-11. Navigate between months using month dropdown.  
-12. System auto-generates all 12 months for current year.  
-13. Copy checklist items from previous month to future months.  
-14. Dashboard reflects progress correctly.  
+**AI Agent Creation Golden Path**  
+1. Register and login as a user
+2. Navigate to agents page → see empty state
+3. Upload a workflow recording file
+4. Create agent from recording with purpose prompt
+5. View processing status and wait for completion
+6. Review generated agent configuration and intents
+7. Test run the agent and verify execution
+8. View execution logs and repair attempts
+9. Activate agent for production use
 
-**User Invitation Flow**  
-1. Admin creates entity.  
-2. Admin invites manager user.  
-3. Manager logs in → sees entity in switcher.  
-4. Manager can see all data but cannot manage users.  
-5. Admin invites employee user.  
-6. Employee logs in → sees only assigned tasks.  
+**Agent Execution with Fallback Repair**  
+1. Create an agent with intentionally broken selectors
+2. Run the agent and observe primary execution failure
+3. Verify LLM fallback repair is triggered
+4. Check that new selectors are generated and applied
+5. Confirm successful execution after repair
+6. Review repair logs with confidence scores and reasoning
 
-**Entity Switching Flow**  
-1. User belongs to multiple entities.  
-2. User can switch between entities via dropdown.  
-3. Dashboard updates to show data for active entity.  
-4. Data isolation maintained between entities.  
+**Login Management Flow**  
+1. Navigate to logins page
+2. Add new login credentials with encryption
+3. Test login connection and verify status
+4. Associate login with an agent
+5. Run agent using the login credentials
+6. Verify secure credential handling
 
-**Role-Based Access Flow**  
-1. Admin can create entities and invite users.  
-2. Manager can see all data but cannot manage users.  
-3. Employee can only see tasks assigned to them.  
-4. Unauthorized access attempts are blocked.  
+**Recording Processing Pipeline**  
+1. Upload various recording formats (mp4, webm)
+2. Verify file size and type validation
+3. Check processing status updates in real-time
+4. Monitor background job completion
+5. Verify metadata extraction and intent generation
 
-**Month Navigation Flow**  
-1. User can switch between months using dropdown in page title.  
-2. Page title shows current month name (e.g., "September 2025").  
-3. System automatically creates all 12 months for current year.  
-4. Future months can copy checklist items from previous month.  
-5. Month dropdown shows all available months for entity.
-
-**Other Flows**  
-- First-time user with no entities sees contact admin message.  
-- Returning user lands on current month with existing data for active entity.  
-- Cross-entity access attempts are blocked.  
-- Entity switcher shows correct roles and permissions.  
-- Team member dropdowns show users from active entity only.  
+**Security & Access Control**  
+1. Verify users can only see their own agents and logins
+2. Test unauthorized access attempts are blocked
+3. Confirm credential masking in UI
+4. Verify encrypted storage in database  
 
 ---
 
-## Fixtures
+## Test Fixtures
 
-- Test data for multi-entity scenarios  
-  - Sample entities with different user roles.  
-  - Sample checklist items with various statuses per entity.  
-  - Sample tasks with different assignees and due dates.  
-  - Role-based test scenarios (Admin/Manager/Employee).  
+- **Agent Test Data**  
+  - Sample agents with enriched metadata and processing status
+  - Various agent configurations with different action types
+  - Agents in different states (DRAFT, ACTIVE, processing)
+  - Sample recordings for testing upload pipeline
+
+- **Login Test Data**  
+  - Sample login credentials with encryption
+  - Different system types (ERP, CRM, etc.)
+  - Various connection statuses for testing
+
+- **Execution Test Data**  
+  - Sample agent runs with repair logs
+  - Failed executions for fallback testing
+  - Successful executions with metadata
 
 ---
 
@@ -146,9 +140,9 @@
 
 - ✅ Lint must pass  
 - ✅ Typecheck must pass  
-- ✅ Unit tests must pass  
-- ✅ Integration tests must pass  
-- ✅ Golden path E2E must pass  
-- ✅ Multi-entity E2E must pass  
-- ✅ Role-based access E2E must pass  
+- ✅ Unit tests must pass (metadata, LLM service, executor)
+- ✅ Integration tests must pass (APIs, recording pipeline)
+- ✅ Agent creation E2E must pass  
+- ✅ Agent execution with fallback repair E2E must pass
+- ✅ Security and access control E2E must pass  
 - ✅ Build must succeed  

@@ -1,0 +1,86 @@
+# Render deployment configuration for Agents MVP
+services:
+  # Main web service (Next.js API + Frontend)
+  - type: web
+    name: agents-mvp-backend
+    env: node
+    plan: starter
+    buildCommand: npm install && npx prisma generate
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: agents-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: agents-redis
+          property: connectionString
+      - key: ENCRYPTION_KEY_BASE64
+        generateValue: true
+      - key: INTERNAL_RUNNER_TOKEN
+        generateValue: true
+      - key: FILE_STORAGE_DIR
+        value: /opt/render/project/src/data/agent_outputs
+      - key: NEXTAUTH_URL
+        value: https://agents-mvp-backend.onrender.com
+      - key: NEXTAUTH_SECRET
+        generateValue: true
+      - key: PUPPETEER_SKIP_CHROMIUM_DOWNLOAD
+        value: true
+      - key: PUPPETEER_EXECUTABLE_PATH
+        value: /usr/bin/google-chrome-stable
+
+  # Background worker service (Puppeteer)
+  - type: worker
+    name: agents-mvp-worker
+    env: node
+    plan: starter
+    buildCommand: npm install && npx prisma generate
+    startCommand: npm run worker
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: agents-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: agents-redis
+          property: connectionString
+      - key: ENCRYPTION_KEY_BASE64
+        fromService:
+          type: web
+          name: agents-mvp-backend
+          envVarKey: ENCRYPTION_KEY_BASE64
+      - key: INTERNAL_RUNNER_TOKEN
+        fromService:
+          type: web
+          name: agents-mvp-backend
+          envVarKey: INTERNAL_RUNNER_TOKEN
+      - key: FILE_STORAGE_DIR
+        value: /opt/render/project/src/data/agent_outputs
+      - key: PUPPETEER_SKIP_CHROMIUM_DOWNLOAD
+        value: true
+      - key: PUPPETEER_EXECUTABLE_PATH
+        value: /usr/bin/google-chrome-stable
+
+# PostgreSQL Database
+databases:
+  - name: agents-db
+    plan: starter
+    databaseName: agents
+    user: app
+
+# Redis Cache
+services:
+  - type: redis
+    name: agents-redis
+    plan: starter
+    maxmemoryPolicy: allkeys-lru

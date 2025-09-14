@@ -1,22 +1,11 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import Providers from "./components/Providers";
-import LayoutWithSidebar from "./components/LayoutWithSidebar";
-
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
+import { Sidebar } from "@/components/Sidebar";
 
 export const metadata: Metadata = {
-  title: "Checklist App",
-  description: "Manage your monthly checklists and tasks",
+  title: "vergo - Automation Platform",
+  description: "Manage your automation agents and login credentials",
 };
 
 export default function RootLayout({
@@ -26,13 +15,20 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-      >
+      <body>
         <Providers>
-          <LayoutWithSidebar>
-            {children}
-          </LayoutWithSidebar>
+          <div style={{ display: "flex", minHeight: "100vh" }}>
+            <Sidebar />
+            <main style={{ 
+              flex: 1, 
+              marginLeft: "240px", 
+              padding: "24px",
+              minHeight: "100vh",
+              backgroundColor: "#f9f9f9"
+            }}>
+              {children}
+            </main>
+          </div>
         </Providers>
       </body>
     </html>
