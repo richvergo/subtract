@@ -231,6 +231,35 @@ rm -rf .next
 npm run build
 ```
 
+## 📁 File Upload & Storage
+
+### Agent Recording Storage
+- **Location**: `/uploads/agents/` directory in project root
+- **Naming**: `agent_{timestamp}.{extension}` (e.g., `agent_1757875604930.webm`)
+- **Permissions**: Ensure directory is writable by the application
+- **Cleanup**: Implement periodic cleanup for orphaned files
+
+### File Upload Validation
+```typescript
+// ✅ CORRECT - Validate file uploads
+const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100MB
+const ALLOWED_MIME_TYPES = ['video/webm', 'video/mp4'];
+
+if (file.size > MAX_FILE_SIZE) {
+  return NextResponse.json({ error: 'File too large' }, { status: 400 });
+}
+
+if (!ALLOWED_MIME_TYPES.includes(file.type)) {
+  return NextResponse.json({ error: 'Invalid file type' }, { status: 400 });
+}
+```
+
+### Production Considerations
+- **Future**: Integrate with S3 or similar cloud storage for production
+- **Security**: Validate file contents, not just extensions
+- **Performance**: Consider streaming for large files
+- **Backup**: Implement file backup and recovery procedures
+
 ## 📚 Resources
 
 - [TypeScript Best Practices](https://typescript-eslint.io/rules/)

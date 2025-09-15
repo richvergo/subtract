@@ -100,7 +100,8 @@ model Agent {
   status            AgentStatus @default(DRAFT)
   processingStatus  String      @default("processing") // processing|ready|failed
   processingProgress Int?       // 0..100
-  recordingPath     String?     // Path to uploaded recording
+  recordingPath     String?     // Path to uploaded recording (legacy)
+  recordingUrl      String?     // URL or path to uploaded video file
   ownerId           String
   createdAt         DateTime    @default(now())
   updatedAt         DateTime    @updatedAt

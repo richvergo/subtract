@@ -5,7 +5,9 @@ import Link from "next/link"
 
 // Enhanced fetcher with proper error handling according to API_CONTRACT.md
 async function fetcher(url: string) {
-  const res = await fetch(url)
+  const res = await fetch(url, {
+    credentials: 'include', // Include session cookies
+  })
   if (res.status === 401) throw new Error("Unauthorized - please login")
   if (!res.ok) throw new Error(`Failed to fetch: ${res.status}`)
   return res.json()

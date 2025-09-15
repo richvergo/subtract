@@ -5,10 +5,18 @@ import { db } from '@/lib/db';
 import { llmService } from '@/lib/llm-service';
 import { recordWorkflowSchema, type RecordWorkflowInput, type AgentIntent } from '@/lib/schemas/agents';
 import { getUserEmailForQuery } from '@/lib/auth';
+import { writeFile, mkdir } from 'fs/promises';
+import { join } from 'path';
+import { existsSync } from 'fs';
+
+// Configuration constants
+const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100MB
+const ALLOWED_MIME_TYPES = ['video/webm', 'video/mp4'];
+const UPLOADS_DIR = join(process.cwd(), 'uploads', 'agents');
 
 /**
- * POST /api/agents/record - Record and annotate a workflow
- * Updated to use camelCase field names
+ * POST /api/agents/record - Record and annotate a workflow with file upload
+ * Accepts multipart FormData with fields: name, purposePrompt, and file (video blob)
  */
 export async function POST(request: NextRequest) {
   try {
@@ -34,59 +42,79 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const body = await request.json();
-    const validatedData = recordWorkflowSchema.parse(body);
+    // Parse multipart form data
+    const formData = await request.formData();
+    const name = formData.get('name') as string;
+    const purposePrompt = formData.get('purposePrompt') as string;
+    const file = formData.get('file') as File;
 
-    // Verify that all login IDs belong to the user
-    const userLogins = await db.login.findMany({
-      where: {
-        id: { in: validatedData.loginIds },
-        ownerId: user.id,
-      },
-      select: { id: true },
-    });
-
-    if (userLogins.length !== validatedData.loginIds.length) {
+    // Validate required fields
+    if (!name || !purposePrompt) {
       return NextResponse.json(
-        { error: 'One or more logins not found or not owned by user' },
+        { error: 'Missing required fields: name and purposePrompt are required' },
         { status: 400 }
       );
     }
 
-    // Generate LLM annotations for the recorded steps
-    let agentIntents: AgentIntent[] = [];
-    try {
-      agentIntents = await llmService.annotateWorkflow(
-        validatedData.recordedSteps,
-        validatedData.purposePrompt,
-        validatedData.description
+    if (!file) {
+      return NextResponse.json(
+        { error: 'No file uploaded' },
+        { status: 400 }
       );
-    } catch (error) {
-      console.error('LLM annotation failed:', error);
-      // Continue without annotations if LLM fails
-      agentIntents = [];
     }
 
-    // Create agent with both config and intents
+    // Validate file
+    if (file.size > MAX_FILE_SIZE) {
+      return NextResponse.json(
+        { error: `File too large. Maximum size is ${MAX_FILE_SIZE / (1024 * 1024)}MB` },
+        { status: 400 }
+      );
+    }
+
+    if (!ALLOWED_MIME_TYPES.includes(file.type)) {
+      return NextResponse.json(
+        { error: `Invalid file type. Allowed types: ${ALLOWED_MIME_TYPES.join(', ')}` },
+        { status: 400 }
+      );
+    }
+
+    // Ensure uploads directory exists
+    if (!existsSync(UPLOADS_DIR)) {
+      await mkdir(UPLOADS_DIR, { recursive: true });
+    }
+
+    // Generate unique filename
+    const timestamp = Date.now();
+    const fileExtension = file.type === 'video/webm' ? 'webm' : 'mp4';
+    const filename = `agent_${timestamp}.${fileExtension}`;
+    const filePath = join(UPLOADS_DIR, filename);
+
+    // Save file to disk
+    try {
+      const bytes = await file.arrayBuffer();
+      const buffer = Buffer.from(bytes);
+      await writeFile(filePath, buffer);
+    } catch (error) {
+      console.error('Failed to save file:', error);
+      return NextResponse.json(
+        { error: 'Failed to save uploaded file' },
+        { status: 500 }
+      );
+    }
+
+    // Create agent with recording URL
     const result = await db.$transaction(async (tx) => {
       // Create the agent
       const agent = await tx.agent.create({
         data: {
-          name: validatedData.name,
-          description: validatedData.description,
-          agentConfig: JSON.stringify(validatedData.recordedSteps),
-          purposePrompt: validatedData.purposePrompt,
-          agentIntents: JSON.stringify(agentIntents),
+          name: name.trim(),
+          description: `Agent created with screen recording (${Math.round(file.size / 1024)}KB)`,
+          purposePrompt: purposePrompt.trim(),
+          agentConfig: JSON.stringify([]), // Empty config for now
+          agentIntents: JSON.stringify([]), // Empty intents for now
+          recordingUrl: `/uploads/agents/${filename}`,
           ownerId: user.id,
         },
-      });
-
-      // Create agent-login associations
-      await tx.agentLogin.createMany({
-        data: validatedData.loginIds.map(loginId => ({
-          agentId: agent.id,
-          loginId,
-        })),
       });
 
       return agent;
@@ -123,6 +151,7 @@ export async function POST(request: NextRequest) {
       agentConfig: agent.agentConfig ? JSON.parse(agent.agentConfig) : [],
       purposePrompt: agent.purposePrompt,
       agentIntents: agent.agentIntents ? JSON.parse(agent.agentIntents) : [],
+      recordingUrl: agent.recordingUrl,
       createdAt: agent.createdAt,
       updatedAt: agent.updatedAt,
       logins: agent.agentLogins.map((al) => ({
@@ -134,23 +163,16 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ 
       agent: transformedAgent,
-      message: 'Workflow recorded and annotated successfully'
+      message: 'Agent created with recording successfully'
     }, { status: 201 });
 
   } catch (error: any) {
-    console.error('[agents/record] DB error', {
+    console.error('[agents/record] Error', {
       message: error?.message,
       stack: error?.stack,
       name: error?.name,
       cause: error?.cause,
     });
-    
-    if (error instanceof Error && error.name === 'ZodError') {
-      return NextResponse.json(
-        { error: 'Validation error', details: error.message },
-        { status: 400 }
-      );
-    }
 
     return NextResponse.json(
       { error: 'Internal server error' },

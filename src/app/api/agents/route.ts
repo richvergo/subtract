@@ -74,6 +74,7 @@ export async function GET() {
       purposePrompt: agent.purposePrompt,
       agentIntents: agent.agentIntents ? JSON.parse(agent.agentIntents) : null,
       recordingPath: agent.recordingPath,
+      recordingUrl: agent.recordingUrl,
       ownerId: agent.ownerId,
       createdAt: agent.createdAt,
       updatedAt: agent.updatedAt,

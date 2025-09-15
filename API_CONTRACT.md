@@ -182,30 +182,29 @@ if (response.status === 401) {
 #### POST /api/agents/record
 **Status**: ✅ Implemented and validated
 
-**Request**:
-```json
-{
-  "name": "Website Scraper",
-  "purposePrompt": "Navigate to e-commerce site and click on product buttons to gather pricing data",
-  "description": "Automatically scrapes product data from e-commerce sites",
-  "loginIds": ["login_123", "login_456"],
-  "workflowSteps": [
-    {
-      "action": "goto",
-      "url": "https://example.com",
-      "selector": null,
-      "value": null,
-      "timeout": 30000
-    },
-    {
-      "action": "click",
-      "selector": ".product-button",
-      "value": null,
-      "timeout": 5000
-    }
-  ]
-}
+**Request**: Multipart FormData
+```javascript
+const formData = new FormData();
+formData.append("name", "Website Scraper");
+formData.append("purposePrompt", "Navigate to e-commerce site and click on product buttons to gather pricing data");
+formData.append("file", videoBlob, "recording.webm");
+
+fetch('/api/agents/record', {
+  method: 'POST',
+  body: formData,
+  credentials: 'include'
+});
 ```
+
+**Form Fields**:
+- `name` (string, required): Agent name
+- `purposePrompt` (string, required): Description of what the agent should accomplish
+- `file` (File, required): Video recording blob (WebM or MP4, max 100MB)
+
+**File Validation**:
+- Max size: 100MB
+- Allowed MIME types: `video/webm`, `video/mp4`
+- Files stored in `/uploads/agents/{timestamp}.{extension}`
 
 **Response**:
 ```json
@@ -213,22 +212,42 @@ if (response.status === 401) {
   "agent": {
     "id": "cmfk1qxme00008ouxh2dcj4fz",
     "name": "Website Scraper",
-    "description": "Automatically scrapes product data from e-commerce sites",
+    "description": "Agent created with screen recording (1024KB)",
     "status": "DRAFT",
-    "processingStatus": "PROCESSING",
-    "processingProgress": 0,
+    "processingStatus": "processing",
+    "processingProgress": null,
     "purposePrompt": "Navigate to e-commerce site and click on product buttons to gather pricing data",
+    "recordingUrl": "/uploads/agents/agent_1757875604930.webm",
     "createdAt": "2024-01-15T10:30:00.000Z",
     "updatedAt": "2024-01-15T10:30:00.000Z"
   },
-  "message": "Agent created successfully and is being processed"
+  "message": "Agent created with recording successfully"
 }
 ```
 
 **Error Responses**:
-- `400 Bad Request`: Invalid input data
+- `400 Bad Request`: Invalid input data, file too large, or invalid file type
 - `401 Unauthorized`: User not authenticated
 - `404 Not Found`: User or login not found
+- `500 Internal Server Error`: File upload failed
+
+#### GET /api/agents/[id]/recording
+**Status**: ✅ Implemented and validated
+
+**Purpose**: Retrieve agent recording for playback/download
+
+**Request**: GET request with agent ID in URL path
+
+**Response**: Video file stream with appropriate headers
+- `Content-Type`: `video/webm` or `video/mp4`
+- `Content-Length`: File size in bytes
+- `Content-Disposition`: `inline; filename="{agent_name}_recording.{extension}"`
+- `Cache-Control`: `public, max-age=3600`
+
+**Error Responses**:
+- `401 Unauthorized`: User not authenticated
+- `404 Not Found`: Agent not found, no recording, or file missing
+- `500 Internal Server Error`: File read error
 - `500 Internal Server Error`: Processing failed
 
 #### POST /api/agents
@@ -630,8 +649,9 @@ if (response.status === 401) {
 | `/api/health` | GET | ✅ | System health check |
 | `/api/agents` | GET | ✅ | List user's agents |
 | `/api/agents` | POST | 🚧 | Create agent (direct) |
-| `/api/agents/record` | POST | ✅ | Record workflow and create agent |
+| `/api/agents/record` | POST | ✅ | Record workflow and create agent with file upload |
 | `/api/agents/[id]` | GET | ✅ | Get agent details |
+| `/api/agents/[id]/recording` | GET | ✅ | Get agent recording for playback |
 | `/api/agents/[id]` | PUT | 🚧 | Update agent |
 | `/api/agents/[id]` | DELETE | 🚧 | Delete agent |
 | `/api/agents/[id]/runs` | GET | ✅ | Get agent runs |
