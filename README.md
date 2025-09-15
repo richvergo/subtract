@@ -21,6 +21,7 @@ vergo is a modern AI agent automation platform that enables users to create, man
 - **[CONTRIBUTING.md](./CONTRIBUTING.md)** - How to contribute effectively
 - **[ARCHITECTURE.md](./ARCHITECTURE.md)** - System architecture and design decisions
 - **[TESTING.md](./TESTING.md)** - Testing strategies and best practices
+- **[BACKEND_PROTECTION_SUMMARY.md](./BACKEND_PROTECTION_SUMMARY.md)** - Backend lock policy and protection
 
 These documents prevent common errors and ensure code quality consistency.
 

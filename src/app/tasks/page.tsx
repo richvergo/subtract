@@ -1,4 +1,4 @@
-export default function DashboardPage() {
+export default function TasksPage() {
   return (
     <div>
       <h1 style={{ 
@@ -7,7 +7,7 @@ export default function DashboardPage() {
         marginBottom: "16px",
         color: "#333"
       }}>
-        Dashboard
+        Tasks
       </h1>
     </div>
   )

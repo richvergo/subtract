@@ -4,6 +4,36 @@ This document establishes coding standards and guard rails to prevent common err
 
 ## 🚨 Critical Guard Rails
 
+### 0. Backend Lock Policy
+
+**🚫 BACKEND IS FROZEN** - The backend is locked for stability during frontend development.
+
+#### Protected Files
+- `src/app/api/**/route.ts` - All API routes
+- `src/lib/db.ts` - Database layer
+- `src/lib/queue.ts` - Queue system
+- `prisma/schema.prisma` - Database schema
+
+#### Rules
+- **Backend changes** must be done in a branch prefixed with `backend/`
+- **Frontend work** must be done in a branch prefixed with `frontend/`
+- **AI prompts** must explicitly state "do not modify backend files"
+- **CI will fail** if backend files are changed in non-backend branches
+
+#### Branch Naming
+```bash
+# ✅ Backend work
+git checkout -b backend/fix-agent-execution
+git checkout -b backend/add-login-validation
+
+# ✅ Frontend work  
+git checkout -b frontend/improve-agent-ui
+git checkout -b frontend/add-dashboard-charts
+
+# ❌ Generic branches (not recommended)
+git checkout -b feature/something
+```
+
 ### 1. Database Schema Consistency
 **NEVER** use snake_case in Prisma schema or database operations. Always use camelCase.
 
@@ -133,6 +163,21 @@ Before merging any PR, verify:
 - [ ] No test database schema mismatches
 
 ## 🚀 Development Workflow
+
+### Initial Setup (First Time Only)
+1. **Copy environment file**: `cp .env.example .env.local`
+2. **Set required environment variables** in `.env.local`:
+   ```bash
+   DATABASE_URL="file:./prisma/dev.db"
+   NEXTAUTH_SECRET="your-secret-key-here"  # Generate with: openssl rand -base64 32
+   ```
+3. **Setup database**: `npx prisma migrate dev && npx prisma db seed`
+4. **Start development server**: `npm run dev`
+
+### Test Login Credentials
+After seeding, use these credentials to test the application:
+- **Alice**: `alice@example.com` / `password123`
+- **Bob**: `bob@example.com` / `password123`
 
 ### Before Starting Work
 1. Run `npm run schema-check` to ensure schema is up to date

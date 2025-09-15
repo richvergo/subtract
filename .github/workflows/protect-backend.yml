@@ -1,0 +1,96 @@
+name: Protect Backend Files
+
+on:
+  pull_request:
+    branches: [ main, develop ]
+  push:
+    branches: [ main, develop ]
+
+jobs:
+  check-backend:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Fetch full history for proper diff
+      
+    - name: Detect backend file changes
+      run: |
+        echo "🔍 Checking for unauthorized backend file modifications..."
+        
+        # Get list of changed files
+        CHANGED_FILES=$(git diff --name-only origin/main...HEAD)
+        
+        # Check if any backend files were modified
+        if echo "$CHANGED_FILES" | grep -E "^(src/app/api/|src/lib/db\.ts|src/lib/queue\.ts|prisma/schema\.prisma)"; then
+          echo "❌ BACKEND FILES DETECTED IN CHANGES:"
+          echo "$CHANGED_FILES" | grep -E "^(src/app/api/|src/lib/db\.ts|src/lib/queue\.ts|prisma/schema\.prisma)"
+          echo ""
+          echo "🚫 Backend files are locked for stability!"
+          echo "   Backend changes must be made in a branch prefixed with 'backend/'"
+          echo "   Current branch: ${{ github.head_ref }}"
+          echo ""
+          echo "📋 Protected files:"
+          echo "   - src/app/api/**/route.ts (API routes)"
+          echo "   - src/lib/db.ts (Database layer)"
+          echo "   - src/lib/queue.ts (Queue system)"
+          echo "   - prisma/schema.prisma (Database schema)"
+          echo ""
+          echo "🔧 To fix this:"
+          echo "   1. Create a new branch: git checkout -b backend/your-feature-name"
+          echo "   2. Make your backend changes in that branch"
+          echo "   3. Create a PR from the backend/* branch"
+          echo ""
+          exit 1
+        else
+          echo "✅ No backend files modified - changes are allowed"
+        fi
+        
+    - name: Verify branch naming for backend changes
+      if: contains(github.head_ref, 'backend/')
+      run: |
+        echo "🔍 Backend branch detected: ${{ github.head_ref }}"
+        echo "✅ Backend changes allowed in backend/* branches"
+        
+    - name: Check for backend files in non-backend branches
+      if: ${{ !contains(github.head_ref, 'backend/') }}
+      run: |
+        echo "🔍 Checking non-backend branch: ${{ github.head_ref }}"
+        
+        # Get list of changed files
+        CHANGED_FILES=$(git diff --name-only origin/main...HEAD)
+        
+        # Check if any backend files were modified in non-backend branch
+        if echo "$CHANGED_FILES" | grep -E "^(src/app/api/|src/lib/db\.ts|src/lib/queue\.ts|prisma/schema\.prisma)"; then
+          echo "❌ BACKEND FILES MODIFIED IN NON-BACKEND BRANCH!"
+          echo ""
+          echo "🚫 This branch (${{ github.head_ref }}) is not allowed to modify backend files."
+          echo "   Backend changes must be made in a branch prefixed with 'backend/'"
+          echo ""
+          echo "🔧 To fix this:"
+          echo "   1. Create a new branch: git checkout -b backend/your-feature-name"
+          echo "   2. Cherry-pick or move your backend changes to that branch"
+          echo "   3. Create a PR from the backend/* branch"
+          echo "   4. Keep only frontend changes in this branch"
+          echo ""
+          exit 1
+        else
+          echo "✅ No backend files modified in non-backend branch"
+        fi
+        
+    - name: Display branch protection summary
+      run: |
+        echo "📋 Branch Protection Summary:"
+        echo "   Current branch: ${{ github.head_ref }}"
+        echo "   Is backend branch: ${{ contains(github.head_ref, 'backend/') }}"
+        echo "   Is frontend branch: ${{ contains(github.head_ref, 'frontend/') }}"
+        echo ""
+        echo "🔒 Backend files are protected and can only be modified in:"
+        echo "   - Branches prefixed with 'backend/'"
+        echo "   - With explicit approval and review"
+        echo ""
+        echo "🎨 Frontend changes should be made in:"
+        echo "   - Branches prefixed with 'frontend/'"
+        echo "   - Or generic feature branches (for frontend-only changes)"

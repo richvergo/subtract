@@ -8,16 +8,44 @@ This guide outlines how to contribute to the vergo automation platform effective
 ```
 main (production)
 ├── develop (integration)
-├── feature/feature-name
+├── backend/backend-feature
+├── frontend/frontend-feature
 ├── bugfix/bug-description
 └── hotfix/critical-fix
 ```
 
 ### Branch Naming Conventions
-- **Features**: `feature/add-agent-confirmation`
+
+#### 🚫 Backend Protection
+- **Backend features**: `backend/fix-agent-execution`
+- **Backend bugfixes**: `backend/add-login-validation`
+- **Database changes**: `backend/update-agent-schema`
+
+#### 🎨 Frontend Work
+- **Frontend features**: `frontend/improve-agent-ui`
+- **Frontend bugfixes**: `frontend/fix-dashboard-layout`
+- **UI/UX changes**: `frontend/add-dashboard-charts`
+
+#### 🔧 General Work
 - **Bugfixes**: `bugfix/fix-login-validation`
 - **Hotfixes**: `hotfix/security-patch`
 - **Chores**: `chore/update-dependencies`
+
+### Backend Lock Policy
+
+**🚫 BACKEND IS FROZEN** - Backend files are protected for stability.
+
+#### Protected Files
+- `src/app/api/**/route.ts` - All API routes
+- `src/lib/db.ts` - Database layer
+- `src/lib/queue.ts` - Queue system
+- `prisma/schema.prisma` - Database schema
+
+#### Rules
+- **Backend changes** must be in `backend/*` branches only
+- **CI will fail** if backend files are modified in non-backend branches
+- **Frontend work** should use `frontend/*` branches
+- **AI prompts** must state "do not modify backend files"
 
 ### Workflow
 1. **Create feature branch** from `develop`
@@ -93,7 +121,33 @@ All PRs must pass:
 ### Automated Checks
 - GitHub Actions run on every PR
 - Quality checks enforced via workflow
+- Backend file protection enforced via CI
 - No merge allowed with failing checks
+
+### GitHub Branch Protection Rules
+
+#### Required Settings
+1. **Enable branch protection** on `main` and `develop` branches
+2. **Require status checks** to pass before merging
+3. **Require branches to be up to date** before merging
+4. **Dismiss stale reviews** when new commits are pushed
+
+#### CI Checks Required
+- ✅ **Protect Backend Files** - Ensures backend files aren't modified in wrong branches
+- ✅ **Quality Checks** - Lint, type-check, and tests
+- ✅ **Build Check** - Application builds successfully
+
+#### Branch Protection Configuration
+```yaml
+# GitHub Settings > Branches > Add Rule
+Branch name pattern: main
+☑️ Require a pull request before merging
+☑️ Require status checks to pass before merging
+  ☑️ protect-backend.yml
+  ☑️ quality-checks.yml
+☑️ Require branches to be up to date before merging
+☑️ Dismiss stale reviews when new commits are pushed
+```
 
 ## 📚 Documentation Updates
 

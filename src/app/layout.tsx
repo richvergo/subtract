@@ -15,7 +15,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body>
+      <body style={{ margin: 0, fontFamily: "Arial, sans-serif" }}>
         <Providers>
           <div style={{ display: "flex", minHeight: "100vh" }}>
             <Sidebar />

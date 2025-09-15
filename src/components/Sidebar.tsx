@@ -14,12 +14,20 @@ export function Sidebar() {
 
   const navigation = [
     {
+      name: 'Dashboard',
+      href: '/',
+    },
+    {
       name: 'Agents',
       href: '/agents',
     },
     {
       name: 'Logins',
       href: '/logins',
+    },
+    {
+      name: 'Tasks',
+      href: '/tasks',
     },
   ]
 
@@ -102,7 +110,10 @@ export function Sidebar() {
                 }}
               >
                 <span style={{ fontSize: "16px" }}>
-                  {item.name === 'Agents' ? '🤖' : '🔑'}
+                  {item.name === 'Dashboard' ? '📊' : 
+                   item.name === 'Agents' ? '🤖' : 
+                   item.name === 'Logins' ? '🔑' : 
+                   item.name === 'Tasks' ? '📋' : '•'}
                 </span>
                 <span>{item.name}</span>
               </Link>

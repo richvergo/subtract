@@ -1,3 +1,8 @@
+// 🚫 BACKEND LOCKED
+// Do not edit unless on a backend-scoped branch with explicit approval.
+// This file is part of the stable backend queue system and should not be modified
+// during frontend development tasks.
+
 import { db } from './db';
 import { llmService } from './llm-service';
 

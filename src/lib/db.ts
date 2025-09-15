@@ -1,3 +1,8 @@
+// 🚫 BACKEND LOCKED
+// Do not edit unless on a backend-scoped branch with explicit approval.
+// This file is part of the stable backend database layer and should not be modified
+// during frontend development tasks.
+
 import { PrismaClient } from '@prisma/client';
 
 const globalForPrisma = globalThis as unknown as {
