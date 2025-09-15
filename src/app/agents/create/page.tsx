@@ -52,8 +52,17 @@ export default function CreateAgentPage() {
       
       mediaRecorder.onstop = () => {
         const blob = new Blob(chunksRef.current, { type: 'video/webm' })
-        recordingBlobRef.current = blob
-        setHasRecording(true)
+        
+        // Validate file size (100MB limit)
+        const maxSize = 100 * 1024 * 1024 // 100MB
+        if (blob.size > maxSize) {
+          setError(`Recording too large (${Math.round(blob.size / (1024 * 1024))}MB). Maximum size is 100MB. Please record a shorter video.`)
+          setHasRecording(false)
+          recordingBlobRef.current = null
+        } else {
+          recordingBlobRef.current = blob
+          setHasRecording(true)
+        }
         
         // Stop all tracks
         if (streamRef.current) {
@@ -87,39 +96,17 @@ export default function CreateAgentPage() {
     setError("")
 
     try {
-      // First, try to get available logins
-      const loginsResponse = await fetch('/api/logins')
-      let loginIds: string[] = []
-      
-      if (loginsResponse.ok) {
-        const loginsData = await loginsResponse.json()
-        if (loginsData.logins && loginsData.logins.length > 0) {
-          // Use the first available login for now
-          loginIds = [loginsData.logins[0].id]
-        }
-      }
+      // Build FormData object for multipart upload
+      const formData = new FormData()
+      formData.append("name", name.trim())
+      formData.append("purposePrompt", purposePrompt.trim())
+      formData.append("file", recordingBlobRef.current, "recording.webm")
 
-      // If no logins available, we need to inform the user
-      if (loginIds.length === 0) {
-        setError("No logins available. Please create a login first before creating an agent.")
-        setIsSaving(false)
-        return
-      }
-
-      // Create the agent with the recording metadata
-      const response = await fetch('/api/agents', {
+      // Send to the record endpoint with FormData
+      const response = await fetch('/api/agents/record', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          name,
-          purposePrompt,
-          description: `Agent created with screen recording. Recording file size: ${Math.round(recordingBlobRef.current.size / 1024)}KB. Note: Video recording functionality requires backend file upload support.`,
-          agentConfig: [], // Empty config for now - would need backend processing of the video
-          agentIntents: [], // Empty intents for now - would need LLM processing
-          loginIds
-        }),
+        body: formData,
+        credentials: 'include'
       })
 
       if (!response.ok) {
@@ -127,8 +114,16 @@ export default function CreateAgentPage() {
         throw new Error(errorData.error || `HTTP error! status: ${response.status}`)
       }
 
-      // Redirect to agents list on success
-      router.push('/agents')
+      // Parse response to get the new agent
+      const data = await response.json()
+      const newAgent = data.agent
+
+      if (!newAgent || !newAgent.id) {
+        throw new Error("Invalid response: agent ID not found")
+      }
+
+      // Redirect to the new agent's detail page
+      router.push(`/agents/${newAgent.id}`)
       
     } catch (err) {
       console.error('Error saving agent:', err)
@@ -179,16 +174,16 @@ export default function CreateAgentPage() {
           Record your screen to demonstrate the workflow, then provide metadata for your automation agent.
         </p>
         <div style={{
-          backgroundColor: "#fff3cd",
-          color: "#856404",
+          backgroundColor: "#d1edff",
+          color: "#0c5460",
           padding: "12px 16px",
           borderRadius: "6px",
-          border: "1px solid #ffeaa7",
+          border: "1px solid #bee5eb",
           marginTop: "16px",
           fontSize: "14px"
         }}>
-          <strong>Note:</strong> The recording interface is ready, but full video processing requires backend file upload support. 
-          Currently, agents are created with recording metadata and will need backend integration to process the actual video files.
+          <strong>✅ Recording Ready:</strong> Your screen recording will be uploaded and stored securely. 
+          The video file will be available for playback in the agent details page after creation.
         </div>
       </div>
 
@@ -485,7 +480,7 @@ export default function CreateAgentPage() {
                   marginBottom: "8px"
                 }}>
                   <span>✅</span>
-                  Recording completed ({recordingBlobRef.current ? Math.round(recordingBlobRef.current.size / 1024) : 0}KB)
+                  Recording completed ({recordingBlobRef.current ? Math.round(recordingBlobRef.current.size / (1024 * 1024) * 10) / 10 : 0}MB)
                 </div>
               )}
               
@@ -621,10 +616,11 @@ export default function CreateAgentPage() {
           lineHeight: "1.5"
         }}>
           <li style={{ marginBottom: "6px" }}>Record the complete workflow from start to finish</li>
+          <li style={{ marginBottom: "6px" }}>Keep recordings under 100MB for optimal upload performance</li>
           <li style={{ marginBottom: "6px" }}>Be specific about the websites and actions in your purpose prompt</li>
           <li style={{ marginBottom: "6px" }}>Include any special requirements or conditions</li>
           <li style={{ marginBottom: "6px" }}>Mention the expected outcome or result</li>
-          <li style={{ marginBottom: "6px" }}>Ensure you have at least one login configured before creating an agent</li>
+          <li style={{ marginBottom: "6px" }}>Your recording will be securely stored and available for playback</li>
         </ul>
       </div>
 
