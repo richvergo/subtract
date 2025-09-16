@@ -16,17 +16,21 @@ vergo is an AI agent automation platform that enables users to create intelligen
 
 ### AI Agent Management
 - **Workflow Recording**: Create agents by recording browser workflows with rich DOM metadata capture
-- **LLM-Powered Intelligence**: Automatic intent generation for each workflow step
+- **Multi-Signal Capture**: Enhanced event logs with URLs, keystrokes, element types, and screenshots
+- **LLM-Powered Intelligence**: Automatic intent generation for each workflow step with visual context
 - **Self-Healing Execution**: Two-stage execution with primary automation and LLM fallback repair
-- **Rich Metadata Storage**: Store DOM elements, timestamps, and contextual information
+- **Rich Metadata Storage**: Store DOM elements, timestamps, contextual information, and visual snapshots
 - **Agent Configuration**: JSON-based configuration with structured actions and intent annotations
 - **Execution History**: Track runs with repair logs and performance metrics
 
 ### Enhanced Automation Capabilities
+- **Multi-Signal Event Capture**: URLs, keystrokes, element types, text content, and screenshots
+- **Visual Context Storage**: Screenshot capture at key workflow moments for better LLM understanding
 - **DOM Metadata Capture**: Extract tag, type, innerText, ariaLabel, placeholder for each action
 - **Intent-Driven Repair**: When selectors fail, use LLM to generate new selectors based on intent
 - **Background Processing**: Queue-based recording processing and intent generation
 - **Processing Status Tracking**: Real-time progress updates during agent creation
+- **Scalable Event Storage**: Event table for large datasets with efficient querying
 
 ### Login Credential Management
 - **Secure Storage**: AES-256 encrypted storage of login credentials and authentication tokens
@@ -43,12 +47,13 @@ vergo is an AI agent automation platform that enables users to create intelligen
 3. User can start by adding login credentials or creating their first agent
 
 #### AI Agent Creation Workflow
-1. **Record Workflow**: User records a browser workflow with screen recording
-2. **Upload Recording**: System processes the recording and extracts DOM metadata
-3. **Define Purpose**: User provides a natural language description of the agent's purpose
-4. **Generate Intents**: LLM analyzes the workflow and generates intent annotations
-5. **Review & Confirm**: User reviews the structured steps and intent descriptions
-6. **Test & Activate**: User tests the agent and activates it for production use
+1. **Record Workflow**: User records a browser workflow with screen recording and enriched event capture
+2. **Multi-Signal Capture**: System captures URLs, keystrokes, element interactions, and screenshots
+3. **Upload & Process**: System processes recording, extracts DOM metadata, and stores visual context
+4. **Define Purpose**: User provides a natural language description of the agent's purpose
+5. **Generate Intents**: LLM analyzes the workflow with visual context and generates intent annotations
+6. **Review & Confirm**: User reviews structured steps, intent descriptions, and visual snapshots
+7. **Test & Activate**: User tests the agent and activates it for production use
 
 #### Agent Execution Workflow
 1. **Primary Execution**: Agent runs using stored selectors and metadata
@@ -82,7 +87,13 @@ vergo is an AI agent automation platform that enables users to create intelligen
   - `agent_config`: JSONB with structured actions and DOM metadata
   - `purpose_prompt`: User's natural language description
   - `agent_intents`: JSONB with LLM-generated intent annotations
+  - `event_log`: JSONB with structured event timeline (legacy)
+  - `transcript`: Voice narration transcript from recordings
   - `processing_status`: Background processing state (processing|ready|failed)
+- **Events**: Scalable event storage for multi-signal capture
+  - `step`, `action`, `target`, `value`, `url`, `element_type`, `element_text`
+  - `screenshot_url`: Reference to stored screenshot files
+  - Indexed by `agent_id` and `step` for efficient querying
 - **Logins**: Encrypted credential storage with connection testing
 - **AgentRuns**: Execution history with repair logs and performance metrics
 - **AgentLogins**: Many-to-many relationship between agents and credentials

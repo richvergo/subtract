@@ -31,22 +31,27 @@ This document provides a comprehensive overview of the vergo automation platform
 
 ## 🔄 Core Workflows
 
-### 1. **Create Agent** (Record + Prompt)
+### 1. **Create Agent** (Multi-Signal Recording + Processing)
 ```mermaid
 graph TD
     A[User starts recording] --> B[Capture DOM metadata]
     B --> C[Record user actions]
-    C --> D[Stop recording]
-    D --> E[Generate LLM intents]
-    E --> F[Create agent with config]
-    F --> G[Agent ready for execution]
+    C --> D[Capture screenshots]
+    D --> E[Stop recording]
+    E --> F[Process multi-signal data]
+    F --> G[Store events & screenshots]
+    G --> H[Generate LLM intents]
+    H --> I[Create agent with config]
+    I --> J[Agent ready for execution]
 ```
 
 **Key Components:**
+- **Multi-Signal Capture**: URLs, keystrokes, element types, text content, screenshots
 - **DOM Capture**: Rich metadata extraction (selectors, timestamps, context)
-- **Action Recording**: User interaction capture with Puppeteer
-- **LLM Processing**: Intent generation and workflow annotation
-- **Agent Storage**: Configuration and intent storage in database
+- **Visual Context**: Screenshot capture at key workflow moments
+- **Event Storage**: Scalable Event table for large datasets
+- **LLM Processing**: Intent generation with visual context
+- **Agent Storage**: Configuration, intents, and event data in database
 
 ### 2. **Run Agent** (Two-Stage Execution)
 ```mermaid
@@ -83,6 +88,53 @@ graph TD
 - **Session Management**: Automatic session validation
 - **Reconnection Flow**: Seamless re-authentication
 - **Health Monitoring**: Proactive login status checking
+
+## 📊 Event System Architecture
+
+### Multi-Signal Event Capture
+The platform now supports enriched event logs with multi-signal capture for better automation context:
+
+```mermaid
+graph TD
+    A[User Action] --> B[Event Capture]
+    B --> C[DOM Metadata]
+    B --> D[URL Tracking]
+    B --> E[Keystroke Capture]
+    B --> F[Screenshot Capture]
+    C --> G[Event Object]
+    D --> G
+    E --> G
+    F --> H[Screenshot Storage]
+    H --> I[File System]
+    G --> J[Event Table]
+    G --> K[JSON Storage]
+```
+
+### Event Data Structure
+```typescript
+interface EventLogEntry {
+  step: number;                    // Sequential step number
+  action: 'navigate' | 'click' | 'type' | 'wait' | 'scroll' | 'hover' | 'select';
+  target?: string;                 // CSS selector or element identifier
+  value?: string;                  // Input value (excludes passwords)
+  url?: string;                    // Current page URL
+  elementType?: string;            // HTML element type
+  elementText?: string;            // Text content of element
+  screenshotUrl?: string;          // Reference to stored screenshot
+  timestamp: number;               // Unix timestamp
+}
+```
+
+### Storage Strategy
+- **Event Table**: Scalable storage for large event datasets with indexed queries
+- **JSON Storage**: Legacy `eventLog` field for simple event arrays
+- **Screenshot Storage**: File system storage in `/uploads/events/` with URL references
+- **Security**: Password values automatically excluded, file validation enforced
+
+### API Endpoints
+- **POST /api/agents/record-events**: Create agent with enriched event logs
+- **GET /api/agents/[id]/review**: Retrieve agent with event data and screenshots
+- **POST /api/agents/[id]/summarize**: Enhanced summarization with visual context
 
 ## 🛠️ Technology Stack
 

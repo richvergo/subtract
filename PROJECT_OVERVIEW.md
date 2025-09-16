@@ -8,16 +8,20 @@ vergo is a modern AI agent automation platform that enables users to create inte
 
 ### 🤖 AI Agent Creation & Management
 - Create agents by recording browser workflows with rich DOM metadata capture
-- LLM-powered automatic intent generation for each workflow step
+- Multi-signal event capture with URLs, keystrokes, element types, and screenshots
+- LLM-powered automatic intent generation with visual context for each workflow step
 - Self-healing execution with primary automation and LLM fallback repair
 - Background processing with real-time status tracking
 - Execution history with repair logs and performance metrics
 
 ### 🧠 Enhanced Automation Capabilities
+- Multi-signal event capture (URLs, keystrokes, element types, text content, screenshots)
+- Visual context storage with screenshot capture at key workflow moments
 - DOM metadata capture (tag, type, innerText, ariaLabel, placeholder)
 - Intent-driven selector repair when automation fails
 - Two-stage execution with intelligent fallback mechanisms
 - Rich contextual information for robust automation
+- Scalable event storage with efficient querying
 
 ### 🔐 Secure Credential Management
 - AES-256 encrypted storage of login credentials and authentication tokens
@@ -52,7 +56,13 @@ vergo is a modern AI agent automation platform that enables users to create inte
   - `agent_config`: JSONB with structured actions and DOM metadata
   - `purpose_prompt`: User's natural language description
   - `agent_intents`: JSONB with LLM-generated intent annotations
+  - `event_log`: JSONB with structured event timeline (legacy)
+  - `transcript`: Voice narration transcript from recordings
   - `processing_status`: Background processing state (processing|ready|failed)
+- **Events**: Scalable event storage for multi-signal capture
+  - `step`, `action`, `target`, `value`, `url`, `element_type`, `element_text`
+  - `screenshot_url`: Reference to stored screenshot files
+  - Indexed by `agent_id` and `step` for efficient querying
 - **Logins**: Encrypted credential storage with connection testing
 - **AgentRuns**: Execution history with repair logs and performance metrics
 - **AgentLogins**: Many-to-many relationship between agents and credentials
@@ -97,7 +107,9 @@ src/
 
 ### ✅ Completed (MVP)
 - AI agent creation with workflow recording and DOM metadata capture
-- LLM-powered intent generation and self-healing execution
+- Multi-signal event capture with URLs, keystrokes, element types, and screenshots
+- LLM-powered intent generation with visual context and self-healing execution
+- Enhanced event storage with scalable Event table and screenshot management
 - Secure login credential management with encryption
 - Two-stage execution with fallback repair capabilities
 - Background processing and queue management

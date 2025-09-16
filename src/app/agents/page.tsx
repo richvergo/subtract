@@ -3,6 +3,22 @@
 import useSWR from "swr"
 import Link from "next/link"
 
+// Note: Agents represent workflows (recorded automation templates)
+// Tasks represent executions (running those workflows with specific parameters)
+// Users cannot run Agents directly - they must create Tasks to execute workflows
+//
+// Agent Lifecycle Status:
+// - DRAFT: Initial state, needs review and approval
+// - ACTIVE: Approved and ready for execution (displayed as "Live")
+// - REJECTED: Rejected during review process
+// - INACTIVE: Manually deactivated (legacy state)
+//
+// New Agent Fields (from golden path implementation):
+// - recordingUrl: URL to video recording
+// - audioUrl: URL to extracted audio (optional)
+// - llmSummary: AI-generated workflow summary
+// - userContext: User-provided usage context
+
 // Enhanced fetcher with proper error handling according to API_CONTRACT.md
 async function fetcher(url: string) {
   const res = await fetch(url, {
@@ -13,12 +29,12 @@ async function fetcher(url: string) {
   return res.json()
 }
 
-// Interface matching API_CONTRACT.md response structure
+// Interface matching API_CONTRACT.md response structure with new fields
 interface Agent {
   id: string
   name: string
   description?: string
-  status: 'DRAFT' | 'ACTIVE' | 'INACTIVE'
+  status: 'DRAFT' | 'ACTIVE' | 'REJECTED' | 'INACTIVE'
   processingStatus?: string
   processingProgress?: number
   agentConfig?: Array<{
@@ -34,6 +50,10 @@ interface Agent {
     intent: string
   }>
   recordingPath?: string
+  recordingUrl?: string
+  audioUrl?: string
+  llmSummary?: string
+  userContext?: string
   ownerId: string
   createdAt: string
   updatedAt: string
@@ -179,8 +199,19 @@ export default function AgentsPage() {
     switch (status) {
       case 'ACTIVE': return "#28a745"
       case 'DRAFT': return "#ffc107"
+      case 'REJECTED': return "#dc3545"
       case 'INACTIVE': return "#6c757d"
       default: return "#6c757d"
+    }
+  }
+
+  const getStatusDisplay = (status: string) => {
+    switch (status) {
+      case 'ACTIVE': return 'Live'
+      case 'DRAFT': return 'Draft'
+      case 'REJECTED': return 'Rejected'
+      case 'INACTIVE': return 'Inactive'
+      default: return status
     }
   }
 
@@ -375,7 +406,7 @@ export default function AgentsPage() {
                       color: getStatusColor(agent.status),
                       border: `1px solid ${getStatusColor(agent.status)}40`
                     }}>
-                      {agent.status}
+                      {getStatusDisplay(agent.status)}
                     </span>
                   </td>
                   <td style={{ 

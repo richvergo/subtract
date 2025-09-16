@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import { useParams } from 'next/navigation';
 import useSWR from 'swr';
 import Link from 'next/link';
@@ -37,6 +37,7 @@ interface Agent {
     intent: string
   }>
   recordingPath?: string
+  recordingUrl?: string
   ownerId: string
   createdAt: string
   updatedAt: string
@@ -60,6 +61,9 @@ interface AgentResponse {
   agent: Agent
 }
 
+// Note: Agents represent workflows, Tasks represent executions
+// Running Agents directly is not supported - all executions happen via Tasks
+
 export default function AgentDetailPage() {
   const params = useParams();
   const agentId = params.id as string;
@@ -79,6 +83,7 @@ export default function AgentDetailPage() {
       default: return "#6c757d"
     }
   }
+
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleString();
@@ -342,6 +347,173 @@ export default function AgentDetailPage() {
         </div>
       )}
 
+      {/* Recording Playback */}
+      <div style={{
+        backgroundColor: "#fff",
+        borderRadius: "8px",
+        border: "1px solid #dee2e6",
+        padding: "24px",
+        marginBottom: "24px"
+      }}>
+        <h2 style={{ 
+          fontSize: "18px", 
+          fontWeight: "600", 
+          margin: "0 0 16px 0",
+          color: "#333"
+        }}>
+          📹 Recording
+        </h2>
+        
+        {agent.recordingUrl ? (
+          <div>
+            <video 
+              controls 
+              style={{ 
+                width: "100%", 
+                maxHeight: "480px",
+                borderRadius: "6px",
+                backgroundColor: "#f8f9fa"
+              }}
+              src={`/api/agents/${agent.id}/recording`}
+            >
+              <p style={{
+                padding: "20px",
+                textAlign: "center",
+                color: "#6c757d",
+                fontSize: "14px"
+              }}>
+                Your browser doesn't support HTML5 video. 
+                <a 
+                  href={`/api/agents/${agent.id}/recording`} 
+                  download
+                  style={{ color: "#007bff", textDecoration: "none" }}
+                >
+                  Download the video file
+                </a> instead.
+              </p>
+            </video>
+          </div>
+        ) : (
+          <div style={{
+            padding: "40px",
+            textAlign: "center",
+            backgroundColor: "#f8f9fa",
+            borderRadius: "6px",
+            border: "1px solid #e9ecef"
+          }}>
+            <div style={{
+              fontSize: "48px",
+              marginBottom: "16px",
+              color: "#6c757d"
+            }}>
+              📹
+            </div>
+            <p style={{
+              fontSize: "16px",
+              color: "#6c757d",
+              margin: "0 0 8px 0",
+              fontWeight: "500"
+            }}>
+              No recording available for this agent.
+            </p>
+            <p style={{
+              fontSize: "14px",
+              color: "#6c757d",
+              margin: 0
+            }}>
+              Upload a recording when creating or editing this agent.
+            </p>
+          </div>
+        )}
+      </div>
+
+      {/* Execution Guidance */}
+      <div style={{
+        backgroundColor: "#fff",
+        borderRadius: "8px",
+        border: "1px solid #dee2e6",
+        padding: "24px",
+        marginBottom: "24px"
+      }}>
+        <h2 style={{ 
+          fontSize: "18px", 
+          fontWeight: "600", 
+          margin: "0 0 16px 0",
+          color: "#333"
+        }}>
+          🚀 How to Execute This Workflow
+        </h2>
+        
+        <div style={{
+          padding: "20px",
+          backgroundColor: "#f8f9fa",
+          borderRadius: "6px",
+          border: "1px solid #e9ecef",
+          marginBottom: "16px"
+        }}>
+          <div style={{
+            display: "flex",
+            alignItems: "flex-start",
+            gap: "12px"
+          }}>
+            <div style={{
+              fontSize: "24px",
+              marginTop: "2px"
+            }}>
+              💡
+            </div>
+            <div>
+              <p style={{
+                fontSize: "16px",
+                color: "#495057",
+                margin: "0 0 8px 0",
+                fontWeight: "500"
+              }}>
+                This agent represents a recorded workflow.
+              </p>
+              <p style={{
+                fontSize: "14px",
+                color: "#6c757d",
+                margin: "0 0 12px 0",
+                lineHeight: "1.5"
+              }}>
+                To execute it, create a Task that will run this workflow with specific parameters and track the execution results.
+              </p>
+              <Link href="/tasks" style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "6px",
+                background: "#007bff",
+                color: "#fff",
+                padding: "8px 16px",
+                borderRadius: "6px",
+                textDecoration: "none",
+                fontSize: "14px",
+                fontWeight: "500",
+                transition: "background-color 0.2s ease"
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = "#0056b3"
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = "#007bff"
+              }}>
+                <span>📋</span>
+                Go to Tasks
+              </Link>
+            </div>
+          </div>
+        </div>
+        
+        <div style={{
+          fontSize: "12px",
+          color: "#6c757d",
+          fontStyle: "italic"
+        }}>
+          Note: Agents define workflows, Tasks execute them. Running Agents directly is not supported.
+        </div>
+      </div>
+
       {/* Agent Details */}
       <div style={{
         backgroundColor: "#fff",
@@ -574,27 +746,9 @@ export default function AgentDetailPage() {
             )}
           </div>
           
-          {agent.agentRuns && agent.agentRuns.length > 0 && (
-            <div>
-              <h3 style={{ 
-                fontSize: "16px", 
-                fontWeight: "500", 
-                margin: "0 0 12px 0",
-                color: "#495057"
-              }}>
-                Recent Runs
-              </h3>
-              <p style={{ 
-                fontSize: "14px", 
-                color: "#6c757d", 
-                margin: 0 
-              }}>
-                {agent.agentRuns.length} run{agent.agentRuns.length !== 1 ? 's' : ''} recorded
-              </p>
-            </div>
-          )}
         </div>
       )}
+
     </div>
   );
 }

@@ -12,7 +12,7 @@ import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     // Check authentication
@@ -21,7 +21,7 @@ export async function POST(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const runId = params.id;
+    const { id: runId } = await params;
     const body = await request.json();
     const { activateAgent } = confirmAgentRunSchema.parse(body);
 

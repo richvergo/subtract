@@ -135,6 +135,10 @@ if (response.status === 401) {
         }
       ],
       "recordingPath": "/uploads/recordings/recording_cmfk1qxme00008ouxh2dcj4fz_1757875604930.mp4",
+      "recordingUrl": "/uploads/agents/agent_1757875604930.webm",
+      "audioUrl": "/uploads/agents/agent_1757875604930.mp3",
+      "llmSummary": "This agent performs automated data collection from e-commerce sites...",
+      "userContext": "This agent should run daily at 9 AM to collect pricing data",
       "ownerId": "cmfk1qxme00008ouxh2dcj4fz",
       "createdAt": "2024-01-15T10:30:00.000Z",
       "updatedAt": "2024-01-15T10:30:00.000Z",
@@ -230,6 +234,122 @@ fetch('/api/agents/record', {
 - `401 Unauthorized`: User not authenticated
 - `404 Not Found`: User or login not found
 - `500 Internal Server Error`: File upload failed
+
+#### POST /api/agents/record-events
+**Status**: ✅ Implemented and validated - **NEW**
+
+**Purpose**: Record workflow with enriched event logs and screenshots. This endpoint accepts structured event data with multi-signal capture including URLs, keystrokes, and screenshots.
+
+**Request**:
+```json
+{
+  "name": "Google Slides Creator",
+  "description": "Creates presentations in Google Slides",
+  "purposePrompt": "Create a new Google Slides presentation with title and content",
+  "eventLog": [
+    {
+      "step": 1,
+      "action": "navigate",
+      "target": "https://slides.google.com",
+      "url": "https://slides.google.com",
+      "elementType": "page",
+      "elementText": "Google Slides",
+      "timestamp": 1703123456789,
+      "screenshot": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAA..."
+    },
+    {
+      "step": 2,
+      "action": "click",
+      "target": "button[data-action='create']",
+      "url": "https://slides.google.com",
+      "elementType": "button",
+      "elementText": "Blank presentation",
+      "timestamp": 1703123460000
+    },
+    {
+      "step": 3,
+      "action": "type",
+      "target": "input[name='title']",
+      "value": "Q1 Sales Plan",
+      "url": "https://docs.google.com/presentation/d/abc123",
+      "elementType": "input",
+      "elementText": "Untitled presentation",
+      "timestamp": 1703123465000,
+      "screenshot": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQ..."
+    }
+  ],
+  "transcript": "I'm creating a new Google Slides presentation for our Q1 sales plan...",
+  "loginIds": ["login_123"]
+}
+```
+
+**Request Fields**:
+- `name` (string, required): Agent name
+- `description` (string, optional): Agent description
+- `purposePrompt` (string, required): Description of what the agent should accomplish
+- `eventLog` (array, optional): Structured timeline of user actions with multi-signal capture
+- `transcript` (string, optional): Voice narration transcript (max 10,000 chars)
+- `loginIds` (array, optional): Array of login IDs to associate with the agent
+
+**Event Log Schema**:
+- `step` (number): Sequential step number
+- `action` (enum): Action type - "navigate", "click", "type", "wait", "scroll", "hover", "select"
+- `target` (string, optional): CSS selector or element identifier
+- `value` (string, optional): Input value (excludes passwords for security)
+- `url` (string, optional): Current page URL
+- `elementType` (string, optional): HTML element type (input, button, etc.)
+- `elementText` (string, optional): Text content of the element
+- `screenshot` (string, optional): Inline base64 screenshot (will be processed and stored)
+- `timestamp` (number): Unix timestamp
+
+**Security Features**:
+- Password values are automatically excluded from event logs
+- Screenshots are validated (max 200KB, PNG/JPEG only)
+- Filenames are sanitized to prevent path traversal
+- All operations require authentication
+
+**Response**:
+```json
+{
+  "agent": {
+    "id": "cmfk1qxme00008ouxh2dcj4fz",
+    "name": "Google Slides Creator",
+    "description": "Creates presentations in Google Slides",
+    "purposePrompt": "Create a new Google Slides presentation with title and content",
+    "eventLog": "[{\"step\":1,\"action\":\"navigate\",\"target\":\"https://slides.google.com\",\"url\":\"https://slides.google.com\",\"elementType\":\"page\",\"elementText\":\"Google Slides\",\"timestamp\":1703123456789,\"screenshotUrl\":\"/uploads/events/cmfk1qxme00008ouxh2dcj4fz_1_1703123456789.png\"},{\"step\":2,\"action\":\"click\",\"target\":\"button[data-action='create']\",\"url\":\"https://slides.google.com\",\"elementType\":\"button\",\"elementText\":\"Blank presentation\",\"timestamp\":1703123460000},{\"step\":3,\"action\":\"type\",\"target\":\"input[name='title']\",\"value\":\"Q1 Sales Plan\",\"url\":\"https://docs.google.com/presentation/d/abc123\",\"elementType\":\"input\",\"elementText\":\"Untitled presentation\",\"timestamp\":1703123465000,\"screenshotUrl\":\"/uploads/events/cmfk1qxme00008ouxh2dcj4fz_3_1703123465000.jpg\"}]",
+    "transcript": "I'm creating a new Google Slides presentation for our Q1 sales plan...",
+    "createdAt": "2024-01-15T10:30:00.000Z",
+    "updatedAt": "2024-01-15T10:30:00.000Z",
+    "events": [
+      {
+        "id": "event_123",
+        "step": 1,
+        "action": "navigate",
+        "target": "https://slides.google.com",
+        "url": "https://slides.google.com",
+        "elementType": "page",
+        "elementText": "Google Slides",
+        "screenshotUrl": "/uploads/events/cmfk1qxme00008ouxh2dcj4fz_1_1703123456789.png",
+        "createdAt": "2024-01-15T10:30:00.000Z"
+      }
+    ],
+    "logins": [
+      {
+        "id": "login_123",
+        "name": "Google Account",
+        "loginUrl": "https://accounts.google.com"
+      }
+    ]
+  },
+  "message": "Agent created with enriched event logs successfully"
+}
+```
+
+**Error Responses**:
+- `400 Bad Request`: Validation errors, invalid screenshot data, or file too large
+- `401 Unauthorized`: User not authenticated
+- `404 Not Found`: User or login not found
+- `500 Internal Server Error`: Screenshot processing or database error
 
 #### GET /api/agents/[id]/recording
 **Status**: ✅ Implemented and validated
@@ -393,10 +513,256 @@ fetch('/api/agents/record', {
 }
 ```
 
+#### POST /api/agents/[id]/summarize
+**Status**: ✅ Implemented and validated - **ENHANCED**
+
+**Purpose**: Run enhanced LLM summarization with structured event logs and audio transcripts. This endpoint processes detailed clickstream events and voice narration to generate rich, step-by-step workflow summaries with specific tool names and outcomes.
+
+**Prerequisites**:
+- Agent must be in `DRAFT` status
+- Agent must have a `recordingUrl` (video recording)
+- User must own the agent
+
+**Request Body**:
+```json
+{
+  "eventLog": [
+    {
+      "step": 1,
+      "action": "navigate",
+      "target": "https://slides.google.com",
+      "timestamp": 1703123456789,
+      "url": "https://slides.google.com",
+      "elementType": "page",
+      "elementText": "Google Slides"
+    },
+    {
+      "step": 2,
+      "action": "click",
+      "target": "button[data-action='create']",
+      "timestamp": 1703123460000,
+      "url": "https://slides.google.com",
+      "elementType": "button",
+      "elementText": "Blank presentation"
+    },
+    {
+      "step": 3,
+      "action": "type",
+      "target": "input[name='title']",
+      "value": "Q1 Sales Plan",
+      "timestamp": 1703123465000,
+      "url": "https://docs.google.com/presentation/d/abc123",
+      "elementType": "input",
+      "elementText": "Untitled presentation"
+    }
+  ],
+  "transcript": "I'm creating a new Google Slides presentation for our Q1 sales plan. I'll start with a blank template and add the title slide with our company overview."
+}
+```
+
+**Request Fields**:
+- `eventLog` (array, required): Structured timeline of user actions
+  - `step` (number): Sequential step number
+  - `action` (string): Action type (navigate, click, type, scroll, etc.)
+  - `target` (string): Target element or URL
+  - `value` (string, optional): Input value for type actions
+  - `timestamp` (number): Unix timestamp
+  - `url` (string, optional): Current page URL
+  - `elementType` (string, optional): HTML element type
+  - `elementText` (string, optional): Visible text of the element
+- `transcript` (string, optional): Voice narration transcript (max 10,000 chars)
+
+**Response**:
+```json
+{
+  "agent": {
+    "id": "cmfk1qxme00008ouxh2dcj4fz",
+    "name": "Q1 Sales Presentation Creator",
+    "llmSummary": "## Workflow Analysis: Q1 Sales Presentation Creator\n\n**User Narration:** I'm creating a new Google Slides presentation for our Q1 sales plan. I'll start with a blank template and add the title slide with our company overview.\n\n**Step-by-Step Actions:**\n1. **navigate** on https://slides.google.com targeting \"https://slides.google.com\" - \"Google Slides\"\n2. **click** on https://slides.google.com targeting \"button[data-action='create']\" (button) - \"Blank presentation\"\n3. **type** on https://docs.google.com/presentation/d/abc123 targeting \"input[name='title']\" with value \"Q1 Sales Plan\" (input) - \"Untitled presentation\"\n\n**Workflow Summary:** The user completed a multi-step process involving Google Slides. The process involved 3 distinct actions including form interactions, navigation, and content creation. The user provided verbal narration throughout the process, explaining their intent and approach.",
+    "eventLog": "[{\"step\":1,\"action\":\"navigate\",\"target\":\"https://slides.google.com\",\"timestamp\":1703123456789,\"url\":\"https://slides.google.com\",\"elementType\":\"page\",\"elementText\":\"Google Slides\"},{\"step\":2,\"action\":\"click\",\"target\":\"button[data-action='create']\",\"timestamp\":1703123460000,\"url\":\"https://slides.google.com\",\"elementType\":\"button\",\"elementText\":\"Blank presentation\"},{\"step\":3,\"action\":\"type\",\"target\":\"input[name='title']\",\"value\":\"Q1 Sales Plan\",\"timestamp\":1703123465000,\"url\":\"https://docs.google.com/presentation/d/abc123\",\"elementType\":\"input\",\"elementText\":\"Untitled presentation\"}]",
+    "transcript": "I'm creating a new Google Slides presentation for our Q1 sales plan. I'll start with a blank template and add the title slide with our company overview.",
+    "processingStatus": "ready",
+    "processingProgress": 100
+  },
+  "message": "Enhanced agent summarization completed successfully"
+}
+```
+
+**Response Fields**:
+- `agent.id`: Agent identifier
+- `agent.name`: Agent name
+- `agent.llmSummary`: Enhanced AI-generated summary with step-by-step analysis
+- `agent.eventLog`: Stored structured event timeline (JSON string)
+- `agent.transcript`: Stored voice narration transcript
+- `agent.processingStatus`: Updated to "ready" after summarization
+- `agent.processingProgress`: Set to 100% when complete
+
+**Enhanced Summary Features**:
+- **Tool Recognition**: Automatically identifies Google Docs, Google Slides, Canva, Figma, etc.
+- **Step-by-Step Analysis**: Detailed breakdown of each user action
+- **Context Integration**: Combines visual actions with voice narration
+- **Outcome Focus**: Describes actual results achieved, not just actions taken
+- **Audit Trail**: Stores complete event log and transcript for debugging
+
+**Error Responses**:
+- `400 Bad Request`: Agent not in DRAFT status, no recording available, or validation errors
+- `401 Unauthorized`: User not authenticated
+- `404 Not Found`: Agent not found or user not found
+- `500 Internal Server Error`: LLM processing failed
+
+#### POST /api/agents/[id]/review
+**Status**: ✅ Implemented and validated
+
+**Purpose**: Review agent and set status to ACTIVE or REJECTED. This endpoint allows users to review the LLM-generated summary, provide additional context, and make a final decision on whether to activate the agent.
+
+**Prerequisites**:
+- Agent must be in `DRAFT` status
+- Agent must have an `llmSummary` (from previous summarization step)
+- User must own the agent
+
+**Request**:
+```json
+{
+  "userContext": "This agent should run daily at 9 AM to collect pricing data",
+  "decision": "ACCEPT"
+}
+```
+
+**Request Fields**:
+- `userContext` (string, required): User-provided context about how the agent should be used
+- `decision` (enum, required): Either "ACCEPT" or "REJECT"
+
+**Validation Rules**:
+- `userContext` is required when `decision` is "ACCEPT"
+- `userContext` is optional when `decision` is "REJECT"
+
+**Response**:
+```json
+{
+  "agent": {
+    "id": "cmfk1qxme00008ouxh2dcj4fz",
+    "name": "Website Scraper",
+    "status": "ACTIVE",
+    "userContext": "This agent should run daily at 9 AM to collect pricing data",
+    "processingStatus": "ready",
+    "processingProgress": 100
+  },
+  "message": "Agent accepted successfully"
+}
+```
+
+**Response Fields**:
+- `agent.id`: Agent identifier
+- `agent.name`: Agent name
+- `agent.status`: Updated to "ACTIVE" or "REJECTED" based on decision
+- `agent.userContext`: User-provided context (new field)
+- `agent.processingStatus`: Set to "ready"
+- `agent.processingProgress`: Set to 100%
+
+**Error Responses**:
+- `400 Bad Request`: Agent not in DRAFT status, no LLM summary, or missing userContext when decision is ACCEPT
+- `401 Unauthorized`: User not authenticated
+- `404 Not Found`: Agent not found or user not found
+- `422 Unprocessable Entity`: Invalid decision value or validation error
+
+#### GET /api/agents/[id]/review
+**Status**: ✅ Implemented and validated
+
+**Purpose**: Get agent review data including recording, summary, and context. This endpoint provides all the information needed for the user to review and make a decision about the agent.
+
+**Prerequisites**:
+- User must own the agent
+- Agent must exist
+
+**Response**:
+```json
+{
+  "agent": {
+    "id": "cmfk1qxme00008ouxh2dcj4fz",
+    "name": "Website Scraper",
+    "recordingUrl": "/uploads/agents/agent_1757875604930.webm",
+    "audioUrl": "/uploads/agents/agent_1757875604930.mp3",
+    "llmSummary": "This agent performs automated data collection from e-commerce sites...",
+    "userContext": "This agent should run daily at 9 AM to collect pricing data",
+    "status": "ACTIVE",
+    "processingStatus": "ready",
+    "processingProgress": 100,
+    "eventLog": "[{\"step\":1,\"action\":\"navigate\",\"target\":\"https://example.com\",\"timestamp\":1703123456789}]",
+    "transcript": "I'm navigating to the e-commerce site to collect product data...",
+    "events": [
+      {
+        "id": "event_123",
+        "step": 1,
+        "action": "navigate",
+        "target": "https://example.com",
+        "url": "https://example.com",
+        "elementType": "page",
+        "elementText": "E-commerce Site",
+        "screenshotUrl": "/uploads/events/cmfk1qxme00008ouxh2dcj4fz_1_1703123456789.png",
+        "createdAt": "2024-01-15T10:30:00.000Z"
+      }
+    ]
+  }
+}
+```
+
+**Response Fields**:
+- `agent.id`: Agent identifier
+- `agent.name`: Agent name
+- `agent.recordingUrl`: URL/path to the video recording
+- `agent.audioUrl`: URL/path to extracted audio file (optional)
+- `agent.llmSummary`: AI-generated workflow summary
+- `agent.userContext`: User-provided context
+- `agent.status`: Current agent status (DRAFT, ACTIVE, REJECTED, INACTIVE)
+- `agent.processingStatus`: Current processing status
+- `agent.processingProgress`: Processing progress percentage
+- `agent.eventLog`: JSON string of structured event timeline (optional)
+- `agent.transcript`: Voice narration transcript (optional)
+- `agent.events`: Array of enriched event objects with screenshots (new field)
+
+**Error Responses**:
+- `401 Unauthorized`: User not authenticated
+- `404 Not Found`: Agent not found or user not found
+
 #### PUT /api/agents/[id]
 **Status**: 🚧 Missing / future work
 
 **Note**: This endpoint would be used for updating agent details.
+
+---
+
+## Agent Lifecycle & New Fields
+
+### Agent Status Flow
+The new agent lifecycle follows this structured path:
+
+1. **DRAFT** → Initial state after recording creation
+2. **Summarize** → LLM processes recording via `/api/agents/[id]/summarize`
+3. **Review** → User reviews and decides via `/api/agents/[id]/review`
+4. **ACTIVE/REJECTED** → Final state based on user decision
+
+### New Agent Fields
+
+#### `audioUrl` (string, optional)
+- **Purpose**: URL or path to audio file extracted from recording
+- **Usage**: Stores processed audio for voice-over analysis
+- **Example**: `/uploads/agents/agent_1757875604930.mp3`
+
+#### `llmSummary` (string, optional)
+- **Purpose**: AI-generated summary of the agent's workflow
+- **Usage**: Generated by `/api/agents/[id]/summarize` endpoint
+- **Content**: Describes the agent's capabilities and actions based on recording analysis
+
+#### `userContext` (string, optional)
+- **Purpose**: User-provided context about how the agent should be used
+- **Usage**: Required when accepting agent via `/api/agents/[id]/review`
+- **Content**: Scheduling, usage instructions, or additional requirements
+
+### Agent Status Values
+- **DRAFT**: Initial state, ready for summarization
+- **ACTIVE**: Approved by user, ready for execution
+- **REJECTED**: Rejected by user during review
+- **INACTIVE**: Manually deactivated (legacy state)
 
 ---
 
@@ -650,6 +1016,7 @@ fetch('/api/agents/record', {
 | `/api/agents` | GET | ✅ | List user's agents |
 | `/api/agents` | POST | 🚧 | Create agent (direct) |
 | `/api/agents/record` | POST | ✅ | Record workflow and create agent with file upload |
+| `/api/agents/record-events` | POST | ✅ | Record workflow with enriched event logs and screenshots |
 | `/api/agents/[id]` | GET | ✅ | Get agent details |
 | `/api/agents/[id]/recording` | GET | ✅ | Get agent recording for playback |
 | `/api/agents/[id]` | PUT | 🚧 | Update agent |
@@ -661,6 +1028,9 @@ fetch('/api/agents/record', {
 | `/api/agents/[id]/activate` | POST | ✅ | Activate agent |
 | `/api/agents/[id]/annotate` | POST | ✅ | Annotate agent steps |
 | `/api/agents/[id]/repair` | POST | ✅ | Repair agent workflow |
+| `/api/agents/[id]/summarize` | POST | ✅ | Run LLM summarization on agent |
+| `/api/agents/[id]/review` | POST | ✅ | Review agent and set status |
+| `/api/agents/[id]/review` | GET | ✅ | Get agent review data |
 | `/api/logins` | GET | ✅ | List user's logins |
 | `/api/logins` | POST | ✅ | Create login |
 | `/api/logins/[id]` | GET | ✅ | Get login details |

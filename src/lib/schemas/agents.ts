@@ -240,6 +240,54 @@ export const repairSelectorSchema = z.object({
   intent: z.string().min(1, 'Intent is required'),
 });
 
+// Enhanced event log schemas for multi-signal capture
+export const eventLogEntrySchema = z.object({
+  step: z.number().min(0, 'Step must be non-negative'),
+  action: z.enum(['navigate', 'click', 'type', 'wait', 'scroll', 'hover', 'select']),
+  target: z.string().optional(), // CSS selector or element identifier
+  value: z.string().optional(), // Input value (excludes passwords for security)
+  url: z.string().url().optional(), // Current page URL
+  elementType: z.string().optional(), // HTML element type (input, button, etc.)
+  elementText: z.string().optional(), // Text content of the element
+  screenshotUrl: z.string().optional(), // URL to stored screenshot file
+  screenshot: z.string().optional(), // Inline base64 screenshot (will be processed and stored)
+  timestamp: z.number().min(0, 'Timestamp must be non-negative'),
+}).refine(
+  (data) => {
+    // Exclude password values for security
+    if (data.value && (
+      data.target?.toLowerCase().includes('password') ||
+      data.elementType?.toLowerCase().includes('password') ||
+      data.target?.toLowerCase().includes('pass')
+    )) {
+      return false;
+    }
+    return true;
+  },
+  {
+    message: 'Password values are not allowed in event logs for security reasons',
+    path: ['value'],
+  }
+);
+
+export const eventLogSchema = z.array(eventLogEntrySchema);
+
+// Enhanced record workflow schema with event log support
+export const recordWorkflowWithEventsSchema = z.object({
+  name: z.string().min(1, 'Agent name is required').max(255, 'Name too long'),
+  description: z.string().max(500, 'Description too long').optional(),
+  purposePrompt: z.string().min(1, 'Purpose prompt is required'),
+  eventLog: eventLogSchema.optional(), // Enhanced event log with screenshots
+  transcript: z.string().max(10000, 'Transcript too long').optional(),
+  loginIds: z.array(z.string()).min(1, 'At least one login must be selected'),
+});
+
+// Enhanced summarization schema
+export const summarizeWithEventsSchema = z.object({
+  eventLog: eventLogSchema,
+  transcript: z.string().max(10000, 'Transcript too long').optional(),
+});
+
 
 // Type exports
 export type LoginField = z.infer<typeof loginFieldSchema>;
@@ -264,3 +312,7 @@ export type RejectAgentRunInput = z.infer<typeof rejectAgentRunSchema>;
 export type RecordWorkflowInput = z.infer<typeof recordWorkflowSchema>;
 export type AnnotateWorkflowInput = z.infer<typeof annotateWorkflowSchema>;
 export type RepairSelectorInput = z.infer<typeof repairSelectorSchema>;
+export type EventLogEntry = z.infer<typeof eventLogEntrySchema>;
+export type EventLog = z.infer<typeof eventLogSchema>;
+export type RecordWorkflowWithEventsInput = z.infer<typeof recordWorkflowWithEventsSchema>;
+export type SummarizeWithEventsInput = z.infer<typeof summarizeWithEventsSchema>;

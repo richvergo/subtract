@@ -3,11 +3,12 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { db } from '@/lib/db';
 import { llmService } from '@/lib/llm-service';
-import { recordWorkflowSchema, type RecordWorkflowInput, type AgentIntent } from '@/lib/schemas/agents';
+import { recordWorkflowSchema, recordWorkflowWithEventsSchema, type RecordWorkflowInput, type RecordWorkflowWithEventsInput, type AgentIntent } from '@/lib/schemas/agents';
 import { getUserEmailForQuery } from '@/lib/auth';
 import { writeFile, mkdir } from 'fs/promises';
 import { join } from 'path';
 import { existsSync } from 'fs';
+import { processInlineScreenshots } from '@/lib/screenshot-storage';
 
 // Configuration constants
 const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100MB
@@ -49,9 +50,9 @@ export async function POST(request: NextRequest) {
     const file = formData.get('file') as File;
 
     // Validate required fields
-    if (!name || !purposePrompt) {
+    if (!name) {
       return NextResponse.json(
-        { error: 'Missing required fields: name and purposePrompt are required' },
+        { error: 'Missing required field: name is required' },
         { status: 400 }
       );
     }
@@ -109,7 +110,7 @@ export async function POST(request: NextRequest) {
         data: {
           name: name.trim(),
           description: `Agent created with screen recording (${Math.round(file.size / 1024)}KB)`,
-          purposePrompt: purposePrompt.trim(),
+          purposePrompt: purposePrompt?.trim() || "Workflow will be defined after recording analysis",
           agentConfig: JSON.stringify([]), // Empty config for now
           agentIntents: JSON.stringify([]), // Empty intents for now
           recordingUrl: `/uploads/agents/${filename}`,
