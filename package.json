@@ -15,10 +15,11 @@
     "test:api": "jest --testPathPatterns=test_api_",
     "test:worker": "jest --testPathPatterns=test_worker",
     "test:confirmation": "jest --testPathPatterns=test_agent_confirmation",
+    "test:logins-protection": "jest --testPathPatterns=test_logins_protection",
     "test:e2e": "jest --testPathPatterns=test_e2e --verbose --runInBand",
     "test:e2e:watch": "jest --testPathPatterns=test_e2e --watch --runInBand",
     "test:all": "jest --runInBand",
-    "pre-commit": "npm run lint && npm run type-check && npm run test:unit",
+    "pre-commit": "npm run lint && npm run type-check && npm run test:unit && npm run test:logins-protection",
     "type-check": "tsc --noEmit",
     "lint:fix": "eslint . --fix --ext .ts,.tsx",
     "schema-check": "npx prisma generate && npx tsc --noEmit"

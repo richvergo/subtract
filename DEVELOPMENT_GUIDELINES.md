@@ -15,7 +15,46 @@ This represents a major breakthrough in the platform's capabilities!
 
 ## 🚨 Critical Guard Rails
 
-### 0. Backend Lock Policy
+### 0. 🔒 LOGINS FEATURE PROTECTION (HIGHEST PRIORITY)
+
+**🚨 LOGINS FEATURE IS PRODUCTION-READY AND MUST BE PROTECTED**
+
+The logins feature has been tested and verified working with Vergo and Google Slides. It MUST NOT be broken by future changes.
+
+#### Critical Protection Rules:
+1. **State Variables**: These MUST exist in `src/app/logins/page.tsx`:
+   ```typescript
+   const [hasRecording, setHasRecording] = useState(false);
+   const [recordingBlob, setRecordingBlob] = useState<Blob | null>(null);
+   const [recordingError, setRecordingError] = useState<string | null>(null);
+   const [isRecording, setIsRecording] = useState(false);
+   const [analysisStatus, setAnalysisStatus] = useState<'idle' | 'analyzing' | 'complete' | 'error'>('idle');
+   ```
+
+2. **API Endpoints**: These MUST maintain their structure:
+   - `POST /api/logins` - Create login
+   - `GET /api/logins` - List logins
+   - `PUT /api/logins/[id]` - Update login
+   - `DELETE /api/logins/[id]` - Delete login
+   - `POST /api/logins/[id]/check` - Check login status
+   - `POST /api/logins/[id]/test-interactive` - Test login
+
+3. **Pre-Change Checklist**:
+   - [ ] Run `npm run test:api`
+   - [ ] Test manual login creation at `/logins`
+   - [ ] Verify no console errors
+   - [ ] Check that all state variables exist
+
+4. **AI Assistant Instructions**: Always include this context:
+   ```
+   CRITICAL: The logins feature is production-ready. State variables 
+   (hasRecording, recordingBlob, recordingError, isRecording, analysisStatus) 
+   MUST exist in src/app/logins/page.tsx. Run tests before making changes.
+   ```
+
+📚 **Full Documentation**: See `LOGINS_FEATURE_DOCUMENTATION.md` and `LOGINS_PROTECTION_GUIDELINES.md`
+
+### 1. Backend Lock Policy
 
 **🚫 BACKEND IS FROZEN** - The backend is locked for stability during frontend development.
 
