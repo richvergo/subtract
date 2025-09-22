@@ -59,6 +59,7 @@ model Login {
   sessionExpiry  DateTime?
   recordingUrl   String?
   analysisStatus String?      @default("pending") // pending, processing, completed, failed
+  analysisResult String?      // JSON string containing analysis results
   agentLogins    AgentLogin[]
   owner          User         @relation(fields: [ownerId], references: [id], onDelete: Cascade)
 }
@@ -178,6 +179,8 @@ enum LoginStatus {
   BROKEN
   EXPIRED
   SUSPENDED
+  READY_FOR_AGENTS
+  NEEDS_TESTING
 }
 
 enum AgentStatus {

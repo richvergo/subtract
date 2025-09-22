@@ -196,19 +196,25 @@ export async function POST(request: NextRequest) {
     if (recordingUrl) {
       console.log('Triggering login analysis...');
       try {
-        // Call the analysis endpoint
-        const analysisResponse = await fetch(`${process.env.NEXTAUTH_URL || 'http://localhost:3001'}/api/logins/${login.id}/analyze`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
+        // Call LLM service directly instead of HTTP request
+        const { llmService } = await import('@/lib/llm-service');
+        
+        const analysisResult = await llmService.analyzeLoginRecording({
+          name: login.name,
+          loginUrl: login.loginUrl
         });
         
-        if (analysisResponse.ok) {
-          console.log('Login analysis completed successfully');
-        } else {
-          console.error('Login analysis failed:', await analysisResponse.text());
-        }
+        // Update login with analysis results
+        await db.login.update({
+          where: { id: login.id },
+          data: {
+            analysisResult: JSON.stringify(analysisResult),
+            analysisStatus: 'COMPLETED',
+            status: 'NEEDS_TESTING' // Set status to needs testing when analysis is complete
+          }
+        });
+        
+        console.log('Login analysis completed successfully');
       } catch (analysisError) {
         console.error('Failed to trigger login analysis:', analysisError);
         // Continue without failing the login creation

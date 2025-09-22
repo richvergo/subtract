@@ -24,7 +24,7 @@ interface Login {
   username: string
   password?: string
   oauthToken?: string
-  status: 'UNKNOWN' | 'ACTIVE' | 'NEEDS_RECONNECT' | 'DISCONNECTED' | 'BROKEN' | 'EXPIRED' | 'SUSPENDED'
+  status: 'UNKNOWN' | 'ACTIVE' | 'NEEDS_RECONNECT' | 'DISCONNECTED' | 'BROKEN' | 'EXPIRED' | 'SUSPENDED' | 'READY_FOR_AGENTS' | 'NEEDS_TESTING'
   lastCheckedAt?: string
   lastSuccessAt?: string
   lastFailureAt?: string
@@ -49,11 +49,23 @@ export default function LoginsPage() {
   const [isTesting, setIsTesting] = useState(false);
   const [testResult, setTestResult] = useState<{ success: boolean; status?: string; errorMessage?: string; responseTime?: number; lastChecked?: string } | null>(null);
   const [modalError, setModalError] = useState<string | null>(null);
-  const [wizardStep, setWizardStep] = useState(1); // 1: Credentials, 2: Recording, 3: Test
+  const [wizardStep, setWizardStep] = useState(1); // 1: Credentials, 2: Recording, 3: Save
   const [isRecording, setIsRecording] = useState(false);
   const [hasRecording, setHasRecording] = useState(false);
   const [recordingBlob, setRecordingBlob] = useState<Blob | null>(null);
   const [recordingError, setRecordingError] = useState<string | null>(null);
+  const [analysisStatus, setAnalysisStatus] = useState<'idle' | 'analyzing' | 'completed' | 'failed'>('idle');
+  const [createdLoginId, setCreatedLoginId] = useState<string | null>(null);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editingLogin, setEditingLogin] = useState<{ id: string; name: string; username: string } | null>(null);
+  const [editFormData, setEditFormData] = useState({
+    username: '',
+    password: ''
+  });
+  const [isLoadingCredentials, setIsLoadingCredentials] = useState(false);
+  const submissionInProgress = useRef(false);
+  const lastSubmissionTime = useRef(0);
+  const requestId = useRef(0);
   const streamRef = useRef<MediaStream | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
@@ -88,6 +100,8 @@ export default function LoginsPage() {
       'BROKEN': { color: "#dc3545", icon: "❌", text: "Broken" },
       'EXPIRED': { color: "#fd7e14", icon: "⏰", text: "Expired" },
       'SUSPENDED': { color: "#6f42c1", icon: "🚫", text: "Suspended" },
+      'READY_FOR_AGENTS': { color: "#17a2b8", icon: "🤖", text: "Ready for Agents" },
+      'NEEDS_TESTING': { color: "#fd7e14", icon: "🧪", text: "Needs Testing" },
       'UNKNOWN': { color: "#6c757d", icon: "❓", text: "Unknown" }
     };
 
@@ -113,16 +127,43 @@ export default function LoginsPage() {
   };
 
   const handleCreateLogin = async (e: React.FormEvent) => {
+    console.log('🚀 handleCreateLogin called', { 
+      submissionInProgress: submissionInProgress.current, 
+      isSubmitting, 
+      analysisStatus,
+      timestamp: Date.now()
+    });
+    
     e.preventDefault();
+    e.stopPropagation();
+    
+    // Prevent double submission using ref and timestamp for more reliable tracking
+    const now = Date.now();
+    if (submissionInProgress.current || isSubmitting || analysisStatus === 'analyzing' || (now - lastSubmissionTime.current) < 5000) {
+      console.log('❌ Form already submitting or analyzing, ignoring duplicate submission', {
+        submissionInProgress: submissionInProgress.current,
+        isSubmitting,
+        analysisStatus,
+        timeSinceLastSubmission: now - lastSubmissionTime.current
+      });
+      return;
+    }
+    
+    console.log('✅ Proceeding with login creation');
+    submissionInProgress.current = true;
+    lastSubmissionTime.current = now;
+    requestId.current += 1;
+    const currentRequestId = requestId.current;
     
     // Validate form
     if (!formData.name.trim() || !formData.loginUrl.trim() || !formData.username.trim() || !formData.password.trim()) {
       setModalError('All fields are required');
+      submissionInProgress.current = false;
       return;
     }
 
     setIsSubmitting(true);
-    setIsTesting(true);
+    setAnalysisStatus('analyzing');
     setTestResult(null);
     setModalError(null);
 
@@ -133,7 +174,8 @@ export default function LoginsPage() {
       formDataToSend.append('loginUrl', formData.loginUrl.trim());
       formDataToSend.append('username', formData.username.trim());
       formDataToSend.append('password', formData.password);
-      formDataToSend.append('testOnCreate', 'true');
+      formDataToSend.append('testOnCreate', 'false'); // Don't test immediately
+      formDataToSend.append('requestId', currentRequestId.toString());
       
       // Add recording if available
       if (recordingBlob) {
@@ -167,27 +209,98 @@ export default function LoginsPage() {
       }
 
       const result = await response.json();
-      setTestResult(result.testResult);
-
-      // If test was successful, close modal and refresh
-      if (result.testResult?.success) {
-        setTimeout(() => {
-          setIsModalOpen(false);
-          setFormData({ name: '', loginUrl: '', username: '', password: '' });
-          setTestResult(null);
-          setHasRecording(false);
-          setRecordingBlob(null);
-          mutate();
-        }, 2000); // Show success message for 2 seconds
+      
+      // Check if this is still the latest request
+      if (currentRequestId !== requestId.current) {
+        console.log('❌ Request is outdated, ignoring response');
+        return;
+      }
+      
+      setCreatedLoginId(result.login?.id);
+      
+      // Start polling for analysis completion
+      if (result.login?.id) {
+        pollAnalysisStatus(result.login.id);
       }
       
     } catch (error) {
       console.error('Error creating login:', error);
+      
+      // Check if this is still the latest request
+      if (currentRequestId !== requestId.current) {
+        console.log('❌ Request is outdated, ignoring error');
+        return;
+      }
+      
       setModalError(error instanceof Error ? error.message : 'Failed to create login');
+      setAnalysisStatus('failed');
     } finally {
-      setIsSubmitting(false);
-      setIsTesting(false);
+      // Only reset if this is still the latest request
+      if (currentRequestId === requestId.current) {
+        setIsSubmitting(false);
+        submissionInProgress.current = false;
+      }
     }
+  };
+
+  const pollAnalysisStatus = async (loginId: string) => {
+    let attempts = 0;
+    const maxAttempts = 60; // Poll for up to 60 seconds
+    
+    const poll = async () => {
+      attempts++;
+      
+      try {
+        const response = await fetch(`/api/logins/${loginId}/status`, {
+          credentials: 'include'
+        });
+        
+        if (response.ok) {
+          const result = await response.json();
+          
+          if (result.analysisStatus === 'COMPLETED') {
+            setAnalysisStatus('completed');
+            setTestResult({ success: true, status: 'NEEDS_TESTING' });
+            
+            // Close modal and refresh after a short delay
+            setTimeout(() => {
+              setIsModalOpen(false);
+              setFormData({ name: '', loginUrl: '', username: '', password: '' });
+              setTestResult(null);
+              setHasRecording(false);
+              setRecordingBlob(null);
+              setAnalysisStatus('idle');
+              setCreatedLoginId(null);
+              mutate();
+            }, 2000);
+            
+            return;
+          } else if (result.analysisStatus === 'FAILED') {
+            setAnalysisStatus('failed');
+            setTestResult({ success: false, errorMessage: 'Analysis failed' });
+            return;
+          }
+        }
+        
+        if (attempts < maxAttempts) {
+          setTimeout(poll, 1000); // Poll every second
+        } else {
+          setAnalysisStatus('failed');
+          setTestResult({ success: false, errorMessage: 'Analysis timed out' });
+        }
+      } catch (error) {
+        console.error('Error polling analysis status:', error);
+        if (attempts < maxAttempts) {
+          setTimeout(poll, 1000);
+        } else {
+          setAnalysisStatus('failed');
+          setTestResult({ success: false, errorMessage: 'Analysis failed' });
+        }
+      }
+    };
+    
+    // Start polling after a short delay
+    setTimeout(poll, 2000);
   };
 
   const handleTestLogin = async (loginId: string, loginName: string) => {
@@ -212,14 +325,14 @@ export default function LoginsPage() {
         return;
       }
 
-      // If we need to test/login, start the interactive test
-      const confirmMessage = `🌐 This will open a browser window to test ${loginName}.\n\nPlease log in manually when the browser opens. The system will automatically detect when you're successfully logged in.\n\nContinue?`;
+      // If we need to test/login, start the automated browser test
+      const confirmMessage = `🌐 This will open a browser window to test ${loginName}.\n\nPlease watch as the system automatically logs in using your credentials. The browser will close automatically once login is successful.\n\nContinue?`;
       
       if (!confirm(confirmMessage)) {
         return;
       }
 
-      // Start interactive test
+      // Start automated browser test
       const testResponse = await fetch(`/api/logins/${loginId}/test-interactive`, {
         method: 'POST',
         credentials: 'include'
@@ -227,16 +340,20 @@ export default function LoginsPage() {
 
       if (!testResponse.ok) {
         const errorData = await testResponse.json();
-        throw new Error(errorData.error || `Failed to start test: ${testResponse.status}`);
+        // Don't throw error, handle gracefully and show user-friendly message
+        alert(`❌ ${loginName} login test failed: ${errorData.message || errorData.error || 'Login failed'}\n\nPlease check your credentials and try again.`);
+        mutate(); // Refresh the login list
+        return;
       }
 
-      await testResponse.json();
+      const testResult = await testResponse.json();
       
-      // Show instructions
-      alert(`🌐 Browser window opened for ${loginName}!\n\nPlease complete the login process. The system will automatically detect when you're logged in and update the status.`);
-      
-      // Start polling for status updates
-      pollLoginStatus(loginId, loginName);
+      if (testResult.success) {
+        alert(`✅ ${loginName} login test successful!\n\nBrowser will close automatically. Status updated to Ready for Agents.`);
+        mutate(); // Refresh the login list
+      } else {
+        alert(`❌ ${loginName} login test failed: ${testResult.message}\n\nPlease check your credentials and try again.`);
+      }
       
     } catch (error) {
       console.error('Error testing login:', error);
@@ -283,9 +400,81 @@ export default function LoginsPage() {
     setTimeout(poll, 2000);
   };
 
-  const handleReconnectLogin = async (loginId: string, loginName: string) => {
-    // This is now the same as the test function
-    await handleTestLogin(loginId, loginName);
+
+  const handleEditLogin = async (loginId: string, loginName: string) => {
+    setIsLoadingCredentials(true);
+    try {
+      // Fetch the actual username from the server
+      const response = await fetch(`/api/logins/${loginId}/credentials`, {
+        credentials: 'include'
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch login credentials');
+      }
+
+      const credentials = await response.json();
+
+      // Set up the edit modal with the actual username
+      setEditingLogin({
+        id: loginId,
+        name: loginName,
+        username: credentials.username || ''
+      });
+      setEditFormData({
+        username: credentials.username || '',
+        password: '' // Always empty for security
+      });
+      setIsEditModalOpen(true);
+    } catch (error) {
+      console.error('Error fetching credentials:', error);
+      alert('Failed to load login credentials. Please try again.');
+    } finally {
+      setIsLoadingCredentials(false);
+    }
+  };
+
+  const handleUpdateCredentials = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!editingLogin) return;
+    
+    // Validate form
+    if (!editFormData.username.trim() || !editFormData.password.trim()) {
+      alert('Username and password are required');
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/logins/${editingLogin.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+          username: editFormData.username.trim(),
+          password: editFormData.password
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || `Failed to update credentials: ${response.status}`);
+      }
+
+      // Close modal and refresh data
+      setIsEditModalOpen(false);
+      setEditingLogin(null);
+      setEditFormData({ username: '', password: '' });
+      mutate();
+      
+      alert(`✅ Credentials updated for ${editingLogin.name}`);
+      
+    } catch (error) {
+      console.error('Error updating credentials:', error);
+      alert(error instanceof Error ? error.message : 'Failed to update credentials');
+    }
   };
 
   const handleDeleteLogin = async (loginId: string, loginName: string) => {
@@ -321,6 +510,8 @@ export default function LoginsPage() {
     setRecordingBlob(null);
     setRecordingError(null);
     setIsRecording(false);
+    setAnalysisStatus('idle');
+    setCreatedLoginId(null);
     setFormData({ name: '', loginUrl: '', username: '', password: '' });
   };
 
@@ -332,6 +523,8 @@ export default function LoginsPage() {
     setRecordingBlob(null);
     setRecordingError(null);
     setIsRecording(false);
+    setAnalysisStatus('idle');
+    setCreatedLoginId(null);
     setFormData({ name: '', loginUrl: '', username: '', password: '' });
   };
 
@@ -707,30 +900,37 @@ export default function LoginsPage() {
                         </button>
                         
                         <button
-                          onClick={() => handleReconnectLogin(login.id, login.name)}
+                          onClick={() => handleEditLogin(login.id, login.name)}
+                          disabled={isLoadingCredentials}
                           style={{
-                            background: "#ffc107",
-                            color: "#212529",
+                            background: isLoadingCredentials ? "#6c757d" : "#007bff",
+                            color: "#fff",
                             border: "none",
                             padding: "6px 12px",
                             borderRadius: "4px",
                             fontSize: "12px",
                             fontWeight: "500",
-                            cursor: "pointer",
+                            cursor: isLoadingCredentials ? "not-allowed" : "pointer",
                             transition: "background-color 0.2s ease",
                             display: "flex",
                             alignItems: "center",
-                            gap: "4px"
+                            gap: "4px",
+                            opacity: isLoadingCredentials ? 0.6 : 1
                           }}
                           onMouseEnter={(e) => {
-                            e.currentTarget.style.backgroundColor = "#e0a800";
+                            if (!isLoadingCredentials) {
+                              e.currentTarget.style.backgroundColor = "#0056b3";
+                            }
                           }}
                           onMouseLeave={(e) => {
-                            e.currentTarget.style.backgroundColor = "#ffc107";
+                            if (!isLoadingCredentials) {
+                              e.currentTarget.style.backgroundColor = "#007bff";
+                            }
                           }}
                         >
-                          🔄 Reconnect
+                          {isLoadingCredentials ? "⏳" : "✏️"} Edit
                         </button>
+                        
                         
                         <button
                           onClick={() => handleDeleteLogin(login.id, login.name)}
@@ -856,7 +1056,7 @@ export default function LoginsPage() {
                   fontWeight: "500"
                 }}>
                   <span>3</span>
-                  <span>Test</span>
+                  <span>Save</span>
                 </div>
               </div>
               <button
@@ -1304,13 +1504,13 @@ export default function LoginsPage() {
                       cursor: hasRecording ? "pointer" : "not-allowed"
                     }}
                   >
-                    Next: Test Login →
+                    Next: Save Login →
                   </button>
                 </div>
               </div>
             )}
 
-            {/* Step 3: Test */}
+            {/* Step 3: Save */}
             {wizardStep === 3 && (
               <div>
                 <div style={{
@@ -1322,8 +1522,62 @@ export default function LoginsPage() {
                   fontSize: "14px",
                   border: "1px solid #bee5eb"
                 }}>
-                  🧪 <strong>Step 3:</strong> We&apos;ll analyze your recording to create a login agent, then test your credentials to make sure everything works correctly.
+                  💾 <strong>Step 3:</strong> Save your login configuration. We&apos;ll analyze your recording to create a login agent and set the status to "Needs Testing".
                 </div>
+
+                {/* Analysis Status */}
+                {analysisStatus === 'analyzing' && (
+                  <div style={{
+                    backgroundColor: "#fff3cd",
+                    color: "#856404",
+                    padding: "12px 16px",
+                    borderRadius: "6px",
+                    marginBottom: "20px",
+                    fontSize: "14px",
+                    border: "1px solid #ffeaa7",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px"
+                  }}>
+                    <div style={{
+                      width: "16px",
+                      height: "16px",
+                      border: "2px solid #856404",
+                      borderTop: "2px solid transparent",
+                      borderRadius: "50%",
+                      animation: "spin 1s linear infinite"
+                    }}></div>
+                    🤖 Analyzing your recording and creating login agent...
+                  </div>
+                )}
+
+                {analysisStatus === 'completed' && (
+                  <div style={{
+                    backgroundColor: "#d4edda",
+                    color: "#155724",
+                    padding: "12px 16px",
+                    borderRadius: "6px",
+                    marginBottom: "20px",
+                    fontSize: "14px",
+                    border: "1px solid #c3e6cb"
+                  }}>
+                    ✅ <strong>Login Saved!</strong> Your login has been created with status "Needs Testing". You can now test it from the main page.
+                  </div>
+                )}
+
+                {analysisStatus === 'failed' && (
+                  <div style={{
+                    backgroundColor: "#f8d7da",
+                    color: "#721c24",
+                    padding: "12px 16px",
+                    borderRadius: "6px",
+                    marginBottom: "20px",
+                    fontSize: "14px",
+                    border: "1px solid #f5c6cb"
+                  }}>
+                    ❌ <strong>Analysis Failed:</strong> {testResult?.errorMessage || 'Unable to analyze the recording.'}
+                  </div>
+                )}
 
                 <div style={{
                   display: "flex",
@@ -1334,6 +1588,7 @@ export default function LoginsPage() {
                   <button
                     type="button"
                     onClick={prevStep}
+                    disabled={analysisStatus === 'analyzing'}
                     style={{
                       padding: "12px 24px",
                       border: "1px solid #dee2e6",
@@ -1342,7 +1597,8 @@ export default function LoginsPage() {
                       color: "#495057",
                       fontSize: "14px",
                       fontWeight: "500",
-                      cursor: "pointer"
+                      cursor: analysisStatus === 'analyzing' ? "not-allowed" : "pointer",
+                      opacity: analysisStatus === 'analyzing' ? 0.6 : 1
                     }}
                   >
                     ← Back
@@ -1350,24 +1606,219 @@ export default function LoginsPage() {
                   <button
                     type="button"
                     onClick={handleCreateLogin}
-                    disabled={isSubmitting}
+                    disabled={submissionInProgress.current || isSubmitting || analysisStatus === 'analyzing'}
                     style={{
                       padding: "12px 24px",
                       border: "none",
                       borderRadius: "6px",
-                      background: isSubmitting ? "#6c757d" : "#28a745",
+                      background: submissionInProgress.current || isSubmitting || analysisStatus === 'analyzing' ? "#6c757d" : "#28a745",
                       color: "#fff",
                       fontSize: "14px",
                       fontWeight: "500",
-                      cursor: isSubmitting ? "not-allowed" : "pointer",
+                      cursor: submissionInProgress.current || isSubmitting || analysisStatus === 'analyzing' ? "not-allowed" : "pointer",
                       transition: "background-color 0.2s ease",
-                      opacity: isSubmitting ? 0.6 : 1
+                      opacity: submissionInProgress.current || isSubmitting || analysisStatus === 'analyzing' ? 0.6 : 1
                     }}
                   >
-                    {isSubmitting ? (isTesting ? "Analyzing & Testing..." : "Creating...") : "Analyze & Create Login Agent"}
+                    {analysisStatus === 'analyzing' ? "🤖 Analyzing..." : 
+                     analysisStatus === 'completed' ? "✅ Saved" :
+                     analysisStatus === 'failed' ? "❌ Failed" :
+                     "Save Login Configuration"}
                   </button>
                 </div>
               </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Edit Login Modal */}
+      {isEditModalOpen && editingLogin && (
+        <div style={{
+          position: "fixed",
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: "rgba(0, 0, 0, 0.5)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          zIndex: 1000
+        }}>
+          <div style={{
+            backgroundColor: "#fff",
+            borderRadius: "8px",
+            border: "1px solid #dee2e6",
+            padding: "24px",
+            maxWidth: "400px",
+            width: "90%",
+            maxHeight: "80vh",
+            overflow: "auto"
+          }}>
+            <div style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              marginBottom: "20px"
+            }}>
+              <h3 style={{
+                fontSize: "18px",
+                fontWeight: "600",
+                margin: 0,
+                color: "#333"
+              }}>
+                ✏️ Edit Credentials
+              </h3>
+              <button
+                onClick={() => {
+                  setIsEditModalOpen(false);
+                  setEditingLogin(null);
+                  setEditFormData({ username: '', password: '' });
+                }}
+                style={{
+                  background: "none",
+                  border: "none",
+                  fontSize: "24px",
+                  cursor: "pointer",
+                  color: "#6c757d",
+                  padding: "0",
+                  width: "30px",
+                  height: "30px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center"
+                }}
+              >
+                ×
+              </button>
+            </div>
+
+            <div style={{
+              backgroundColor: "#e7f3ff",
+              color: "#0066cc",
+              padding: "12px 16px",
+              borderRadius: "6px",
+              marginBottom: "20px",
+              fontSize: "14px",
+              border: "1px solid #b3d9ff"
+            }}>
+              💡 <strong>Update Credentials:</strong> Enter new username and password for "{editingLogin.name}". The password field is empty for security reasons.
+            </div>
+
+            {isLoadingCredentials ? (
+              <div style={{
+                display: "flex",
+                justifyContent: "center",
+                alignItems: "center",
+                padding: "40px 20px",
+                color: "#6c757d"
+              }}>
+                <div style={{ textAlign: "center" }}>
+                  <div style={{ fontSize: "24px", marginBottom: "12px" }}>⏳</div>
+                  <div>Loading credentials...</div>
+                </div>
+              </div>
+            ) : (
+              <form onSubmit={handleUpdateCredentials}>
+                <div style={{ marginBottom: "16px" }}>
+                  <label style={{
+                    display: "block",
+                    fontSize: "14px",
+                    fontWeight: "500",
+                    color: "#495057",
+                    marginBottom: "8px"
+                  }}>
+                    Username *
+                  </label>
+                  <input
+                    type="text"
+                    value={editFormData.username}
+                    onChange={(e) => setEditFormData(prev => ({ ...prev, username: e.target.value }))}
+                    placeholder="your-username@example.com"
+                    style={{
+                      width: "100%",
+                      padding: "12px",
+                      border: "1px solid #ced4da",
+                      borderRadius: "6px",
+                      fontSize: "14px",
+                      boxSizing: "border-box"
+                    }}
+                    required
+                  />
+                </div>
+
+              <div style={{ marginBottom: "20px" }}>
+                <label style={{
+                  display: "block",
+                  fontSize: "14px",
+                  fontWeight: "500",
+                  color: "#495057",
+                  marginBottom: "8px"
+                }}>
+                  Password *
+                </label>
+                <input
+                  type="password"
+                  value={editFormData.password}
+                  onChange={(e) => setEditFormData(prev => ({ ...prev, password: e.target.value }))}
+                  placeholder="Enter new password"
+                  style={{
+                    width: "100%",
+                    padding: "12px",
+                    border: "1px solid #ced4da",
+                    borderRadius: "6px",
+                    fontSize: "14px",
+                    boxSizing: "border-box"
+                  }}
+                  required
+                />
+              </div>
+
+              <div style={{
+                display: "flex",
+                gap: "12px",
+                justifyContent: "flex-end"
+              }}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsEditModalOpen(false);
+                    setEditingLogin(null);
+                    setEditFormData({ username: '', password: '' });
+                  }}
+                  style={{
+                    background: "#6c757d",
+                    color: "#fff",
+                    border: "none",
+                    padding: "10px 20px",
+                    borderRadius: "6px",
+                    fontSize: "14px",
+                    fontWeight: "500",
+                    cursor: "pointer",
+                    transition: "background-color 0.2s ease"
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  style={{
+                    background: "#28a745",
+                    color: "#fff",
+                    border: "none",
+                    padding: "10px 20px",
+                    borderRadius: "6px",
+                    fontSize: "14px",
+                    fontWeight: "500",
+                    cursor: "pointer",
+                    transition: "background-color 0.2s ease"
+                  }}
+                >
+                  Update Credentials
+                </button>
+              </div>
+            </form>
             )}
           </div>
         </div>

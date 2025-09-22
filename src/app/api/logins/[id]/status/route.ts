@@ -48,6 +48,9 @@ export async function GET(
         lastFailureAt: true,
         failureCount: true,
         errorMessage: true,
+        analysisStatus: true,
+        analysisResult: true,
+        recordingUrl: true,
         createdAt: true,
         updatedAt: true
       }
@@ -74,6 +77,9 @@ export async function GET(
       lastFailureAt: login.lastFailureAt?.toISOString(),
       failureCount: login.failureCount,
       errorMessage: login.errorMessage,
+      analysisStatus: login.analysisStatus,
+      analysisResult: login.analysisResult,
+      recordingUrl: login.recordingUrl,
       createdAt: login.createdAt.toISOString(),
       updatedAt: login.updatedAt.toISOString(),
       isExpired,
