@@ -9,7 +9,7 @@ export function Sidebar() {
   const { data: session } = useSession()
 
   const handleLogout = async () => {
-    await signOut({ callbackUrl: '/register' })
+    await signOut({ callbackUrl: '/login' })
   }
 
   const navigation = [

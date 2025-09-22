@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import Providers from "./components/Providers";
-import { Sidebar } from "@/components/Sidebar";
+import ConditionalLayout from "./components/ConditionalLayout";
 
 export const metadata: Metadata = {
   title: "vergo - Automation Platform",
@@ -17,18 +17,9 @@ export default function RootLayout({
     <html lang="en">
       <body style={{ margin: 0, fontFamily: "Arial, sans-serif" }}>
         <Providers>
-          <div style={{ display: "flex", minHeight: "100vh" }}>
-            <Sidebar />
-            <main style={{ 
-              flex: 1, 
-              marginLeft: "240px", 
-              padding: "24px",
-              minHeight: "100vh",
-              backgroundColor: "#f9f9f9"
-            }}>
-              {children}
-            </main>
-          </div>
+          <ConditionalLayout>
+            {children}
+          </ConditionalLayout>
         </Providers>
       </body>
     </html>

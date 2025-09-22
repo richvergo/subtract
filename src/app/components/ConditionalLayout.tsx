@@ -1,24 +1,22 @@
 'use client';
 
-import { useEffect } from 'react';
 import { useSession } from 'next-auth/react';
-import { useRouter } from 'next/navigation';
+import { usePathname } from 'next/navigation';
+import { Sidebar } from '@/components/Sidebar';
 
-export default function DashboardPage() {
+interface ConditionalLayoutProps {
+  children: React.ReactNode;
+}
+
+export default function ConditionalLayout({ children }: ConditionalLayoutProps) {
   const { data: session, status } = useSession();
-  const router = useRouter();
+  const pathname = usePathname();
 
-  // Redirect to tasks page (new default)
-  useEffect(() => {
-    if (status === 'loading') return; // Still loading
-    if (!session) {
-      router.push('/login');
-    } else {
-      router.push('/tasks');
-    }
-  }, [session, status, router]);
+  // Pages that should NOT have the sidebar
+  const noSidebarPages = ['/login', '/register'];
+  const shouldShowSidebar = session && !noSidebarPages.includes(pathname);
 
-  // Show loading while checking authentication
+  // Show loading state while checking authentication
   if (status === 'loading') {
     return (
       <div style={{
@@ -62,11 +60,23 @@ export default function DashboardPage() {
     );
   }
 
-  // Don't render anything if not authenticated (will redirect)
-  if (!session) {
-    return null;
+  if (shouldShowSidebar) {
+    return (
+      <div style={{ display: "flex", minHeight: "100vh" }}>
+        <Sidebar />
+        <main style={{ 
+          flex: 1, 
+          marginLeft: "240px", 
+          padding: "24px",
+          minHeight: "100vh",
+          backgroundColor: "#f9f9f9"
+        }}>
+          {children}
+        </main>
+      </div>
+    );
   }
 
-  // This component only handles redirects, so return null while redirecting
-  return null;
+  // For login/register pages, render without sidebar
+  return <>{children}</>;
 }

@@ -25,6 +25,11 @@ async function main() {
       // Create test users with proper bcrypt hashed passwords
       const users = [
         {
+          email: 'test@example.com',
+          name: 'Test User',
+          passwordHash,
+        },
+        {
           email: 'alice@example.com',
           name: 'Alice Test',
           passwordHash,
