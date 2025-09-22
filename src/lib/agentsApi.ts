@@ -1,7 +1,6 @@
 /**
  * Agents-specific API utilities with normalization
  * This file contains the normalization layer specifically for Agents, Logins, and Runs
- * Legacy checklist screens continue to use /lib/api.ts for raw responses
  */
 
 import useSWR from "swr";
@@ -21,14 +20,14 @@ export interface Agent {
   name: string;
   description: string | null;
   status: 'DRAFT' | 'ACTIVE' | 'INACTIVE';
-  agentConfig: any[];
+  agentConfig: unknown[];
   purposePrompt: string | null;
   agentIntents?: Array<{
     action: string;
     selector?: string;
     intent: string;
     stepIndex: number;
-    metadata?: any;
+    metadata?: unknown;
   }>;
   createdAt: string;
   updatedAt: string;
@@ -41,7 +40,7 @@ export interface AgentRun {
   status: 'PENDING' | 'RUNNING' | 'COMPLETED' | 'FAILED' | 'CANCELLED' | 'REQUIRES_CONFIRMATION' | 'CONFIRMED' | 'REJECTED';
   startedAt: string;
   finishedAt: string | null;
-  logs: any;
+  logs: unknown;
   screenshot: string | null;
   prompt: string | null;
   userConfirmed: boolean | null;
@@ -60,7 +59,7 @@ export interface CreateLoginData {
 export interface CreateAgentData {
   name: string;
   description?: string;
-  agentConfig: any[];
+  agentConfig: unknown[];
 }
 
 
@@ -76,7 +75,7 @@ export interface RejectRunData {
 const API_BASE = '/api';
 
 // Centralized array fetcher that normalizes API responses for Agents feature
-async function fetchArray(url: string, key: string): Promise<any[]> {
+export async function fetchArray(url: string, key: string): Promise<unknown[]> {
   try {
     const res = await fetch(url, { credentials: "include" });
     if (!res.ok) return [];

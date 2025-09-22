@@ -92,32 +92,33 @@ export async function storeScreenshot(
  */
 export async function processInlineScreenshots(
   agentId: string,
-  eventLog: any[]
-): Promise<any[]> {
+  eventLog: unknown[]
+): Promise<unknown[]> {
   const processedEvents = [];
 
   for (const event of eventLog) {
-    const processedEvent = { ...event };
+    const processedEvent = event && typeof event === 'object' ? { ...event } : {};
 
     // If event has inline screenshot, store it
-    if (event.screenshot && typeof event.screenshot === 'string') {
+    const eventObj = event as Record<string, unknown>;
+    if (eventObj.screenshot && typeof eventObj.screenshot === 'string') {
       try {
         // Assume base64 data URL format: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAA..."
-        const [header, base64] = event.screenshot.split(',');
+        const [header, base64] = (eventObj.screenshot as string).split(',');
         const mimeType = header.match(/data:([^;]+)/)?.[1];
 
         if (mimeType && base64) {
-          const stored = await storeScreenshot(agentId, event.step, {
+          const stored = await storeScreenshot(agentId, (eventObj.step as number), {
             base64,
             mimeType
           });
-          processedEvent.screenshotUrl = stored.url;
-          delete processedEvent.screenshot; // Remove inline data
+          (processedEvent as Record<string, unknown>).screenshotUrl = stored.url;
+          delete (processedEvent as Record<string, unknown>).screenshot; // Remove inline data
         }
       } catch (error) {
         console.error('Failed to store screenshot:', error);
         // Continue without screenshot rather than failing the entire request
-        delete processedEvent.screenshot;
+        delete (processedEvent as Record<string, unknown>).screenshot;
       }
     }
 

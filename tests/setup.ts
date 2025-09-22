@@ -5,7 +5,6 @@
 
 import { PrismaClient } from '@prisma/client';
 import { execSync } from 'child_process';
-import { join } from 'path';
 
 // Global test database instance
 export let testDb: PrismaClient;
@@ -20,8 +19,26 @@ export const TEST_CONFIG = {
   NEXTAUTH_URL: 'http://localhost:3000',
 };
 
-// Setup test database
+// Global setup - runs once before all tests
 beforeAll(async () => {
+  console.log('🚀 Setting up test environment...');
+
+  // Check if Redis is running
+  try {
+    execSync('redis-cli ping', { stdio: 'pipe' });
+    console.log('✅ Redis is running');
+  } catch {
+    console.warn('⚠️  Redis is not running. Some tests may fail.');
+    console.log('   Start Redis with: brew services start redis');
+  }
+
+  // Clean up any existing test database
+  try {
+    execSync('rm -f test.db', { stdio: 'pipe' });
+  } catch {
+    // Ignore if file doesn't exist
+  }
+
   // Set test environment variables
   process.env.DATABASE_URL = TEST_CONFIG.DATABASE_URL;
   process.env.ENCRYPTION_KEY = TEST_CONFIG.ENCRYPTION_KEY;
@@ -50,6 +67,7 @@ beforeAll(async () => {
   }
 
   await testDb.$connect();
+  console.log('✅ Test environment setup complete');
 });
 
 // Cleanup after each test
@@ -64,9 +82,30 @@ afterEach(async () => {
   await testDb.entity.deleteMany();
 });
 
-// Cleanup after all tests
+// Global teardown - runs once after all tests
 afterAll(async () => {
-  await testDb.$disconnect();
+  console.log('🧹 Cleaning up test environment...');
+
+  // Clean up Prisma connections
+  try {
+    await testDb.$disconnect();
+    console.log('✅ Prisma connections closed');
+  } catch {
+    console.warn('⚠️  Failed to close Prisma connections');
+  }
+
+  // Clean up test database
+  try {
+    execSync('rm -f test.db', { stdio: 'pipe' });
+    console.log('✅ Test database cleaned up');
+  } catch {
+    console.warn('⚠️  Failed to clean up test database');
+  }
+
+  // Give a moment for all connections to close
+  await new Promise(resolve => setTimeout(resolve, 100));
+
+  console.log('✅ Test environment cleanup complete');
 });
 
 // Test utilities

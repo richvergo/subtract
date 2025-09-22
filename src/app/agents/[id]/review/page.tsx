@@ -1,8 +1,10 @@
 "use client"
 
 import { useState, useEffect, useCallback, useRef } from "react"
-import { useRouter, useParams } from "next/navigation"
+import { useParams } from "next/navigation"
 import Link from "next/link"
+import { EventTimeline, ScreenshotGallery, SummaryPanel } from "@/app/components"
+import { EventLogEntry } from "@/lib/schemas/agents"
 
 // Agent Review Page - Steps 3-6 of the golden path
 // Step 3: Summarize (LLM processes recording)
@@ -22,17 +24,6 @@ import Link from "next/link"
 // - Clear status indicators and progress tracking
 // - Validation: userContext required for ACCEPT decision
 
-interface EventLogEntry {
-  step: number
-  action: string
-  target: string
-  value?: string
-  timestamp: number
-  url?: string
-  elementType?: string
-  elementText?: string
-}
-
 interface AgentReviewData {
   id: string
   name: string
@@ -45,6 +36,17 @@ interface AgentReviewData {
   processingProgress?: number
   eventLog?: string // JSON string of EventLogEntry[]
   transcript?: string
+  events?: Array<{
+    id: string
+    step: number
+    action: string
+    target?: string
+    url?: string
+    elementType?: string
+    elementText?: string
+    screenshotUrl?: string
+    createdAt: string
+  }>
 }
 
 const REVIEW_STEPS = [
@@ -66,56 +68,9 @@ const parseEventLog = (eventLogString?: string): EventLogEntry[] => {
   }
 }
 
-// Helper function to format event log entry for display
-const formatEventLogEntry = (entry: EventLogEntry, index: number): string => {
-  let formatted = `${index + 1}. ${entry.action}`
-  
-  if (entry.url && entry.url.trim()) {
-    formatted += ` on ${entry.url}`
-  }
-  
-  if (entry.target && entry.target.trim()) {
-    formatted += ` targeting "${entry.target}"`
-  }
-  
-  if (entry.value && entry.value.trim()) {
-    formatted += ` with value "${entry.value}"`
-  }
-  
-  if (entry.elementType) {
-    formatted += ` (${entry.elementType})`
-  }
-  
-  if (entry.elementText && entry.elementText.trim()) {
-    formatted += ` - "${entry.elementText}"`
-  }
-  
-  return formatted
-}
 
-// Helper function to extract tool names from URLs
-const extractToolName = (url: string): string => {
-  if (url.includes('docs.google.com')) return 'Google Docs'
-  if (url.includes('slides.google.com')) return 'Google Slides'
-  if (url.includes('sheets.google.com')) return 'Google Sheets'
-  if (url.includes('canva.com')) return 'Canva'
-  if (url.includes('figma.com')) return 'Figma'
-  if (url.includes('notion.so')) return 'Notion'
-  if (url.includes('airtable.com')) return 'Airtable'
-  if (url.includes('trello.com')) return 'Trello'
-  if (url.includes('asana.com')) return 'Asana'
-  if (url.includes('slack.com')) return 'Slack'
-  if (url.includes('teams.microsoft.com')) return 'Microsoft Teams'
-  if (url.includes('zoom.us')) return 'Zoom'
-  try {
-    return new URL(url).hostname
-  } catch {
-    return url
-  }
-}
 
 export default function AgentReviewPage() {
-  const router = useRouter()
   const params = useParams()
   const agentId = params.id as string
 
@@ -126,6 +81,7 @@ export default function AgentReviewPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [isProcessing, setIsProcessing] = useState(false)
   const [error, setError] = useState("")
+  const [currentSummary, setCurrentSummary] = useState<string>("")
 
   // Use ref to maintain input value and prevent re-render issues
   const userContextRef = useRef<HTMLTextAreaElement>(null)
@@ -136,32 +92,7 @@ export default function AgentReviewPage() {
     setUserContext(value)
   }, [])
 
-  // Load agent data on mount
-  useEffect(() => {
-    if (agentId) {
-      loadAgentData()
-    }
-  }, [agentId])
-
-  // Auto-call summarization if no summary exists
-  useEffect(() => {
-    if (agentData && !agentData.llmSummary && !isProcessing && currentStep === 3) {
-      runSummarization()
-    }
-  }, [agentData, isProcessing, currentStep])
-
-  // Auto-advance to context step after summarization
-  useEffect(() => {
-    if (agentData?.llmSummary && currentStep === 3) {
-      // Auto-advance to context step after a brief delay
-      const timer = setTimeout(() => {
-        setCurrentStep(4)
-      }, 2000)
-      return () => clearTimeout(timer)
-    }
-  }, [agentData?.llmSummary, currentStep])
-
-  const loadAgentData = async () => {
+  const loadAgentData = useCallback(async () => {
     try {
       setIsLoading(true)
       setError("")
@@ -177,6 +108,7 @@ export default function AgentReviewPage() {
       const data = await response.json()
       setAgentData(data.agent)
       setUserContext(data.agent.userContext || "")
+      setCurrentSummary(data.agent.llmSummary || "")
 
       // If agent is already ACTIVE or REJECTED, go to final step
       if (data.agent.status === 'ACTIVE' || data.agent.status === 'REJECTED') {
@@ -188,9 +120,9 @@ export default function AgentReviewPage() {
     } finally {
       setIsLoading(false)
     }
-  }
+  }, [agentId])
 
-  const runSummarization = async () => {
+  const runSummarization = useCallback(async () => {
     try {
       setIsProcessing(true)
       setError("")
@@ -219,6 +151,7 @@ export default function AgentReviewPage() {
       
       // Update agent data with new summary
       setAgentData(prev => prev ? { ...prev, llmSummary: data.agent.llmSummary } : null)
+      setCurrentSummary(data.agent.llmSummary)
       
     } catch (err) {
       console.error('Error running summarization:', err)
@@ -226,7 +159,33 @@ export default function AgentReviewPage() {
     } finally {
       setIsProcessing(false)
     }
-  }
+  }, [agentId, agentData])
+
+  // Load agent data on mount
+  useEffect(() => {
+    if (agentId) {
+      loadAgentData()
+    }
+  }, [agentId, loadAgentData])
+
+  // Auto-call summarization if no summary exists
+  useEffect(() => {
+    if (agentData && !agentData.llmSummary && !isProcessing && currentStep === 3) {
+      runSummarization()
+    }
+  }, [agentData, isProcessing, currentStep, runSummarization])
+
+  // FIXED: Removed auto-advance to context step after summarization
+  // This was causing the issue - users couldn't review the summary
+  // Now users must manually click "Continue" to proceed
+  // useEffect(() => {
+  //   if (agentData?.llmSummary && currentStep === 3) {
+  //     const timer = setTimeout(() => {
+  //       setCurrentStep(4)
+  //     }, 2000)
+  //     return () => clearTimeout(timer)
+  //   }
+  // }, [agentData?.llmSummary, currentStep])
 
   const handleReviewDecision = async (decision: 'ACCEPT' | 'REJECT') => {
     try {
@@ -543,7 +502,7 @@ export default function AgentReviewPage() {
           margin: "8px 0 0 0",
           lineHeight: "1.4"
         }}>
-          Be specific about what data or instructions you'll provide when running this agent.
+          Be specific about what data or instructions you&apos;ll provide when running this agent.
         </p>
       </div>
 
@@ -597,8 +556,7 @@ export default function AgentReviewPage() {
   const Step5Review = () => {
     const eventLogEntries = parseEventLog(agentData?.eventLog)
     const hasEventLog = eventLogEntries.length > 0
-    const hasTranscript = agentData?.transcript && agentData.transcript.trim()
-    const hasSummary = agentData?.llmSummary && agentData.llmSummary.trim()
+    const hasSummary = currentSummary && currentSummary.trim()
 
     return (
       <div style={{
@@ -728,184 +686,59 @@ export default function AgentReviewPage() {
 
           {/* Right: Enhanced Agent Summary Panel */}
           <div>
-            <h3 style={{
-              fontSize: "18px",
-              fontWeight: "600",
-              margin: "0 0 16px 0",
-              color: "#495057"
-            }}>
-              📋 Agent Summary
-            </h3>
-            
-            {/* AI-Generated Summary */}
-            <div style={{
-              backgroundColor: "#f8f9fa",
-              borderRadius: "8px",
-              border: "1px solid #e9ecef",
-              padding: "20px",
-              marginBottom: "20px"
-            }}>
-              <h4 style={{
-                fontSize: "14px",
-                fontWeight: "600",
-                margin: "0 0 12px 0",
-                color: "#495057",
-                display: "flex",
-                alignItems: "center",
-                gap: "6px"
-              }}>
-                📋 AI-Generated Summary
-              </h4>
-              <div style={{
-                fontSize: "14px",
-                lineHeight: "1.6",
-                margin: 0,
-                color: "#495057",
-                whiteSpace: "pre-wrap"
-              }}>
-                {hasSummary ? agentData.llmSummary : "No AI summary available"}
-              </div>
-            </div>
-
-            {/* Step-by-Step Actions */}
-            <div style={{
-              backgroundColor: "#f8f9fa",
-              borderRadius: "8px",
-              border: "1px solid #e9ecef",
-              padding: "20px",
-              marginBottom: "20px"
-            }}>
-              <h4 style={{
-                fontSize: "14px",
-                fontWeight: "600",
-                margin: "0 0 12px 0",
-                color: "#495057",
-                display: "flex",
-                alignItems: "center",
-                gap: "6px"
-              }}>
-                🛠️ Step-by-Step Actions
-              </h4>
-              {hasEventLog ? (
-                <div style={{ margin: 0 }}>
-                  {eventLogEntries.map((entry, index) => (
-                    <div key={index} style={{
-                      fontSize: "14px",
-                      lineHeight: "1.6",
-                      margin: "0 0 8px 0",
-                      color: "#495057",
-                      padding: "8px 12px",
-                      backgroundColor: "#fff",
-                      borderRadius: "4px",
-                      border: "1px solid #e9ecef"
-                    }}>
-                      {formatEventLogEntry(entry, index)}
-                      {entry.url && (
-                        <div style={{
-                          fontSize: "12px",
-                          color: "#6c757d",
-                          marginTop: "4px",
-                          fontStyle: "italic"
-                        }}>
-                          Tool: <strong>{extractToolName(entry.url)}</strong>
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div style={{
-                  fontSize: "14px",
-                  color: "#495057",
-                  margin: 0,
-                  padding: "12px",
-                  backgroundColor: "#fff",
-                  borderRadius: "4px",
-                  border: "1px solid #e9ecef"
-                }}>
-                  <p style={{ margin: "0 0 8px 0", fontWeight: "500" }}>
-                    📹 Video Recording Available
-                  </p>
-                  <p style={{ margin: 0, fontSize: "13px", color: "#6c757d" }}>
-                    The complete workflow is captured in the video recording. Detailed action tracking will be available in future versions of the system.
-                  </p>
-                </div>
-              )}
-            </div>
-
-            {/* Voice Narration Transcript */}
-            {hasTranscript && (
-              <div style={{
-                backgroundColor: "#f8f9fa",
-                borderRadius: "8px",
-                border: "1px solid #e9ecef",
-                padding: "20px",
-                marginBottom: "20px"
-              }}>
-                <h4 style={{
-                  fontSize: "14px",
-                  fontWeight: "600",
-                  margin: "0 0 12px 0",
-                  color: "#495057",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "6px"
-                }}>
-                  🎤 Voice Narration Transcript
-                </h4>
-                <details style={{ margin: 0 }}>
-                  <summary style={{
-                    fontSize: "14px",
-                    color: "#007bff",
-                    cursor: "pointer",
-                    marginBottom: "12px"
-                  }}>
-                    Click to view transcript
-                  </summary>
-                  <div style={{
-                    fontSize: "14px",
-                    lineHeight: "1.6",
-                    color: "#495057",
-                    backgroundColor: "#fff",
-                    padding: "12px",
-                    borderRadius: "4px",
-                    border: "1px solid #e9ecef",
-                    whiteSpace: "pre-wrap"
-                  }}>
-                    {agentData.transcript}
-                  </div>
-                </details>
-              </div>
-            )}
-
-            {/* Usage Context */}
-            <div style={{
-              backgroundColor: "#f8f9fa",
-              borderRadius: "8px",
-              border: "1px solid #e9ecef",
-              padding: "20px"
-            }}>
-              <h4 style={{
-                fontSize: "14px",
-                fontWeight: "600",
-                margin: "0 0 12px 0",
-                color: "#495057",
-                display: "flex",
-                alignItems: "center",
-                gap: "6px"
-              }}>
-                📝 Usage Context
-              </h4>
-              <p style={{
-                fontSize: "14px",
-                lineHeight: "1.6",
-                margin: 0,
-                color: "#495057"
-              }}>
-                {userContext || "No context provided"}
-              </p>
-            </div>
+            <SummaryPanel
+              agentId={agentId}
+              llmSummary={currentSummary}
+              eventLog={eventLogEntries}
+              transcript={agentData?.transcript}
+              onSummaryUpdate={setCurrentSummary}
+            />
           </div>
+        </div>
+
+        {/* New components for enriched event display */}
+        {hasEventLog && (
+          <div style={{
+            display: "grid",
+            gridTemplateColumns: "1fr 1fr",
+            gap: "32px",
+            marginBottom: "32px"
+          }}>
+            {/* Event Timeline */}
+            <EventTimeline events={eventLogEntries} />
+            
+            {/* Screenshot Gallery */}
+            <ScreenshotGallery events={eventLogEntries} />
+          </div>
+        )}
+
+        {/* Usage Context */}
+        <div style={{
+          backgroundColor: "#f8f9fa",
+          borderRadius: "8px",
+          border: "1px solid #e9ecef",
+          padding: "20px",
+          marginBottom: "32px"
+        }}>
+          <h4 style={{
+            fontSize: "14px",
+            fontWeight: "600",
+            margin: "0 0 12px 0",
+            color: "#495057",
+            display: "flex",
+            alignItems: "center",
+            gap: "6px"
+          }}>
+            📝 Usage Context
+          </h4>
+          <p style={{
+            fontSize: "14px",
+            lineHeight: "1.6",
+            margin: 0,
+            color: "#495057"
+          }}>
+            {userContext || "No context provided"}
+          </p>
         </div>
 
         <div style={{
@@ -1011,7 +844,7 @@ export default function AgentReviewPage() {
             fontWeight: "600",
             margin: "0 0 16px 0"
           }}>
-            Your agent "{agentData.name}" is now active and ready to use!
+            Your agent &quot;{agentData.name}&quot; is now active and ready to use!
           </p>
           <p style={{
             color: "#6c757d",

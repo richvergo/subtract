@@ -1,4 +1,4 @@
-import { AgentConfig, AgentIntent, AgentIntents, ActionMetadata } from './schemas/agents';
+import { AgentConfig, AgentIntents, ActionMetadata } from './schemas/agents';
 
 export interface LLMConfig {
   apiKey?: string;
@@ -35,7 +35,51 @@ export class LLMService {
       return this.validateAnnotations(annotations, recordedSteps);
     } catch (error) {
       console.error('Error annotating workflow:', error);
-      throw new Error('Failed to annotate workflow with LLM');
+      throw error; // Propagate the original error
+    }
+  }
+
+  // Template-based recording analysis removed - using screen recording approach instead
+
+  /**
+   * Summarize recorded workflow steps in a clean, user-friendly format
+   */
+  async summarizeWorkflow(recordedSteps: unknown[], transcript?: string): Promise<string> {
+    try {
+      const stepsText = JSON.stringify(recordedSteps, null, 2);
+      const transcriptText = transcript || 'No narration provided';
+      
+      const summaryPrompt = `
+You are analyzing a recorded workflow that a user performed manually. Your goal is to provide a clean, confident summary that shows you understand what the user did.
+
+Here are the recorded steps:
+${stepsText}
+
+Here is the user's narration (if any):
+${transcriptText}
+
+Please provide a clear, step-by-step summary that:
+
+1. **Shows understanding**: Demonstrate you clearly understand what the user did
+2. **Builds confidence**: Use language that makes the user feel confident the automation will work
+3. **Highlights key actions**: Focus on the most important steps and outcomes
+4. **Uses simple language**: Avoid technical jargon, use everyday terms
+5. **Shows the flow**: Explain how each step leads to the next
+
+Format your response as a clean summary with:
+- A brief overview of what was accomplished
+- Numbered steps showing the key actions
+- Confidence indicators (e.g., "I can see you...", "The workflow shows...")
+- A final confirmation that the process is ready for automation
+
+Keep it concise but comprehensive - aim for 3-5 key steps maximum.
+`;
+
+      const response = await this.callLLM(summaryPrompt);
+      return response.trim();
+    } catch (error) {
+      console.error('Error summarizing workflow:', error);
+      throw new Error('Failed to summarize workflow with LLM');
     }
   }
 
@@ -58,7 +102,7 @@ export class LLMService {
       return repair;
     } catch (error) {
       console.error('Error repairing selector:', error);
-      throw new Error('Failed to repair selector with LLM');
+      throw error; // Propagate the original error
     }
   }
 
@@ -97,7 +141,7 @@ Return your response as a JSON array where each object has:
 - selector: the original selector (if applicable)
 - intent: a clear, human-readable description of what this step accomplishes
 - stepIndex: the 0-based index of this step
-- metadata: any additional context (optional)
+- metadata: unknown additional context (optional)
 
 Example response:
 [

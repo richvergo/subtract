@@ -5,12 +5,13 @@
 
 import { db } from './db';
 import { llmService } from './llm-service';
+import { AgentConfig } from './schemas/agents';
 
 // Simple in-memory queue for MVP
 // In production, this would be replaced with Redis/Bull or similar
 interface ProcessingJob {
   agentId: string;
-  recordingPath: string;
+  // recordingPath removed - using screen recording approach instead
   purposePrompt: string;
 }
 
@@ -32,6 +33,12 @@ export async function enqueueAgentProcessing(job: ProcessingJob) {
   if (!isProcessing) {
     processQueue();
   }
+  
+  // Return a job object with an id for API compatibility
+  return {
+    id: `job-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+    data: job,
+  };
 }
 
 /**
@@ -71,7 +78,7 @@ async function processQueue() {
  * Process a single agent recording
  */
 async function processAgentRecording(job: ProcessingJob) {
-  const { agentId, recordingPath, purposePrompt } = job;
+  const { agentId, purposePrompt } = job;
 
   try {
     // Update progress to 10%
@@ -83,7 +90,8 @@ async function processAgentRecording(job: ProcessingJob) {
     // Step 1: Extract workflow steps from recording
     // This is a stub - in production, this would use computer vision/AI
     // to analyze the screen recording and extract click/type/navigate actions
-    const agentConfig = await extractWorkflowSteps(recordingPath);
+    // extractWorkflowSteps removed - using screen recording approach instead
+    const agentConfig: unknown[] = []; // Placeholder for now
 
     // Update progress to 50%
     await db.agent.update({
@@ -93,12 +101,12 @@ async function processAgentRecording(job: ProcessingJob) {
 
     // Step 2: Generate intent annotations using LLM
     const agentIntents = await llmService.annotateWorkflow(
-      agentConfig,
+      agentConfig as AgentConfig,
       purposePrompt
     );
 
     // Step 3: Merge LLM intents into agent config metadata
-    const enrichedAgentConfig = agentConfig.map((step, index) => {
+    const enrichedAgentConfig = (agentConfig as AgentConfig).map((step, index) => {
       const intent = agentIntents[index];
       if (intent && step.metadata) {
         return {
@@ -148,7 +156,8 @@ async function processAgentRecording(job: ProcessingJob) {
  * 
  * For MVP, we return a sample workflow with realistic metadata
  */
-async function extractWorkflowSteps(recordingPath: string): Promise<any[]> {
+/*
+async function extractWorkflowSteps(): Promise<unknown[]> {
   // Simulate processing time
   await new Promise(resolve => setTimeout(resolve, 2000));
 
@@ -318,15 +327,16 @@ async function extractWorkflowSteps(recordingPath: string): Promise<any[]> {
  *   }
  * ]
  */
+
 /**
  * Enqueue an agent run job
  */
-export async function enqueueAgentRun(agentId: string, params: unknown) {
+export async function enqueueAgentRun(agentId: string) {
   // For MVP, we'll use the same processing queue
   // In production, this would be a separate run queue
   const job: ProcessingJob = {
     agentId,
-    recordingPath: "", // Not needed for manual runs
+    // recordingPath removed - using screen recording approach instead
     purposePrompt: "Manual run triggered by user"
   };
   

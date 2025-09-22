@@ -13,10 +13,10 @@ const updateMembershipSchema = z.object({
  */
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const membershipId = params.id;
+    const { id: membershipId } = await params;
 
     // Get the membership to find the entity
     const membership = await db.membership.findUnique({
@@ -34,7 +34,7 @@ export async function PATCH(
     }
 
     // Require admin permission for the entity
-    const context = await requirePermission(membership.entityId, Role.ADMIN);
+    await requirePermission(membership.entityId, Role.ADMIN);
 
     const body = await request.json();
     const { role } = updateMembershipSchema.parse(body);
@@ -71,7 +71,7 @@ export async function PATCH(
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(
-        { error: 'Invalid input', details: error.errors },
+        { error: 'Invalid input', details: error.issues },
         { status: 400 }
       );
     }
@@ -96,10 +96,10 @@ export async function PATCH(
  */
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const membershipId = params.id;
+    const { id: membershipId } = await params;
 
     // Get the membership to find the entity
     const membership = await db.membership.findUnique({
@@ -118,7 +118,7 @@ export async function DELETE(
     }
 
     // Require admin permission for the entity
-    const context = await requirePermission(membership.entityId, Role.ADMIN);
+    await requirePermission(membership.entityId, Role.ADMIN);
 
     // Prevent removing the last admin
     if (membership.role === Role.ADMIN) {

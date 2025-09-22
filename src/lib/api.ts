@@ -17,7 +17,7 @@ export interface Agent {
   name: string;
   description: string | null;
   status: 'DRAFT' | 'ACTIVE';
-  agentConfig: any[];
+  agentConfig: unknown[];
   createdAt: string;
   updatedAt: string;
   latestRuns?: AgentRun[];
@@ -29,7 +29,7 @@ export interface AgentRun {
   status: 'PENDING' | 'SUCCESS' | 'FAILED';
   startedAt: string;
   finishedAt: string | null;
-  logs: any;
+  logs: unknown;
   outputPath: string | null;
   screenshotPath: string | null;
   userConfirmed: boolean | null;
@@ -48,7 +48,7 @@ export interface CreateLoginData {
 export interface CreateAgentData {
   name: string;
   description?: string;
-  agentConfig: any[];
+  agentConfig: unknown[];
 }
 
 

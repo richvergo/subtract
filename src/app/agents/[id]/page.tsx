@@ -1,6 +1,5 @@
 'use client';
 
-import React, { useState } from 'react';
 import { useParams } from 'next/navigation';
 import useSWR from 'swr';
 import Link from 'next/link';
@@ -36,7 +35,7 @@ interface Agent {
     stepIndex: number
     intent: string
   }>
-  recordingPath?: string
+  // recordingPath removed - using screen recording approach instead
   recordingUrl?: string
   ownerId: string
   createdAt: string
@@ -382,7 +381,7 @@ export default function AgentDetailPage() {
                 color: "#6c757d",
                 fontSize: "14px"
               }}>
-                Your browser doesn't support HTML5 video. 
+                Your browser doesn&apos;t support HTML5 video. 
                 <a 
                   href={`/api/agents/${agent.id}/recording`} 
                   download

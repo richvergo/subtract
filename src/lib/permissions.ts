@@ -1,5 +1,5 @@
 import { getServerSession } from 'next-auth';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import { authOptions } from '@/lib/auth-config';
 import { db } from '@/lib/db';
 import { Role } from '@prisma/client';
 import { getUserEmailForQuery } from '@/lib/auth';

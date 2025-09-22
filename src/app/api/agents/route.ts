@@ -5,9 +5,9 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import { authOptions } from '@/lib/auth-config';
 import { db } from '@/lib/db';
-import { createAgentSchema, type CreateAgentInput } from '@/lib/schemas/agents';
+import { createAgentSchema } from '@/lib/schemas/agents';
 
 /**
  * GET /api/agents - List agents for current user
@@ -73,7 +73,7 @@ export async function GET() {
       agentConfig: agent.agentConfig ? JSON.parse(agent.agentConfig) : null,
       purposePrompt: agent.purposePrompt,
       agentIntents: agent.agentIntents ? JSON.parse(agent.agentIntents) : null,
-      recordingPath: agent.recordingPath,
+      // recordingPath removed - using screen recording approach instead
       recordingUrl: agent.recordingUrl,
       ownerId: agent.ownerId,
       createdAt: agent.createdAt,
@@ -198,7 +198,7 @@ export async function POST(request: NextRequest) {
       agentConfig: agent.agentConfig ? JSON.parse(agent.agentConfig) : null,
       purposePrompt: agent.purposePrompt,
       agentIntents: agent.agentIntents ? JSON.parse(agent.agentIntents) : null,
-      recordingPath: agent.recordingPath,
+      // recordingPath removed - using screen recording approach instead
       ownerId: agent.ownerId,
       createdAt: agent.createdAt,
       updatedAt: agent.updatedAt,

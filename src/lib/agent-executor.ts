@@ -41,7 +41,7 @@ export class AgentExecutor {
   private browser: Browser | null = null;
   private page: Page | null = null;
   private context: ExecutionContext;
-  private executionLogs: any[] = [];
+  private executionLogs: unknown[] = [];
   private repairs: Array<{
     stepIndex: number;
     originalSelector: string;
@@ -169,7 +169,7 @@ export class AgentExecutor {
           await this.handleDownload(action);
           break;
         default:
-          throw new Error(`Unknown action: ${action.action}`);
+          throw new Error(`Unknown action: ${(action as AgentAction).action}`);
       }
 
       const duration = Date.now() - startTime;
@@ -185,31 +185,33 @@ export class AgentExecutor {
    * Handle goto action
    */
   private async handleGoto(action: AgentAction): Promise<void> {
-    if (!action.url) {
+    const gotoAction = action as Extract<AgentAction, { action: 'goto' }>;
+    if (!gotoAction.url) {
       throw new Error('URL is required for goto action');
     }
 
-    this.log(`Navigating to: ${action.url}`);
-    await this.page!.goto(action.url, { waitUntil: 'networkidle2', timeout: 30000 });
+    this.log(`Navigating to: ${gotoAction.url}`);
+    await this.page!.goto(gotoAction.url, { waitUntil: 'networkidle2', timeout: 30000 });
   }
 
   /**
    * Handle type action
    */
   private async handleType(action: AgentAction): Promise<void> {
-    if (!action.selector || !action.value) {
+    const typeAction = action as Extract<AgentAction, { action: 'type' }>;
+    if (!typeAction.selector || !typeAction.value) {
       throw new Error('Selector and value are required for type action');
     }
 
     // Resolve variables in the value
-    const resolvedValue = this.resolveVariables(action.value);
+    const resolvedValue = this.resolveVariables(typeAction.value);
     
-    this.log(`Typing into selector: ${action.selector}`, { value: resolvedValue });
+    this.log(`Typing into selector: ${typeAction.selector}`, { value: resolvedValue });
     
     try {
-      await this.page!.waitForSelector(action.selector, { timeout: 10000 });
-      await this.page!.click(action.selector);
-      await this.page!.type(action.selector, resolvedValue);
+      await this.page!.waitForSelector(typeAction.selector, { timeout: 10000 });
+      await this.page!.click(typeAction.selector);
+      await this.page!.type(typeAction.selector, resolvedValue);
     } catch (error) {
       // Try to repair the selector using LLM
       const repairedSelector = await this.attemptRepair(action, 'type');
@@ -227,15 +229,16 @@ export class AgentExecutor {
    * Handle click action
    */
   private async handleClick(action: AgentAction): Promise<void> {
-    if (!action.selector) {
+    const clickAction = action as Extract<AgentAction, { action: 'click' }>;
+    if (!clickAction.selector) {
       throw new Error('Selector is required for click action');
     }
 
-    this.log(`Clicking selector: ${action.selector}`);
+    this.log(`Clicking selector: ${clickAction.selector}`);
     
     try {
-      await this.page!.waitForSelector(action.selector, { timeout: 10000 });
-      await this.page!.click(action.selector);
+      await this.page!.waitForSelector(clickAction.selector, { timeout: 10000 });
+      await this.page!.click(clickAction.selector);
     } catch (error) {
       // Try to repair the selector using LLM
       const repairedSelector = await this.attemptRepair(action, 'click');
@@ -252,42 +255,49 @@ export class AgentExecutor {
    * Handle waitForSelector action
    */
   private async handleWaitForSelector(action: AgentAction): Promise<void> {
-    if (!action.selector) {
+    const waitAction = action as Extract<AgentAction, { action: 'waitForSelector' }>;
+    if (!waitAction.selector) {
       throw new Error('Selector is required for waitForSelector action');
     }
 
-    const timeout = action.timeout || 10000;
-    this.log(`Waiting for selector: ${action.selector}`, { timeout: `${timeout}ms` });
+    const timeout = waitAction.timeout || 10000;
+    this.log(`Waiting for selector: ${waitAction.selector}`, { timeout: `${timeout}ms` });
     
-    await this.page!.waitForSelector(action.selector, { timeout });
+    await this.page!.waitForSelector(waitAction.selector, { timeout });
   }
 
   /**
    * Handle download action
    */
   private async handleDownload(action: AgentAction): Promise<void> {
-    if (!action.selector) {
+    const downloadAction = action as Extract<AgentAction, { action: 'download' }>;
+    if (!downloadAction.selector) {
       throw new Error('Selector is required for download action');
     }
 
-    this.log(`Downloading from selector: ${action.selector}`);
+    this.log(`Downloading from selector: ${downloadAction.selector}`);
     
     // Set up download behavior
-    await this.page!.setDownloadBehavior({ behavior: 'allow', downloadPath: './downloads' });
+    const client = await this.page!.target().createCDPSession();
+    await client.send('Page.setDownloadBehavior', {
+      behavior: 'allow',
+      downloadPath: './downloads'
+    });
     
     // Click the download link/button
-    await this.page!.waitForSelector(action.selector, { timeout: 10000 });
-    await this.page!.click(action.selector);
+    await this.page!.waitForSelector(downloadAction.selector, { timeout: 10000 });
+    await this.page!.click(downloadAction.selector);
     
     // Wait for download to complete (simplified - in production you'd want more robust handling)
-    await this.page!.waitForTimeout(3000);
+    await new Promise(resolve => setTimeout(resolve, 3000));
   }
 
   /**
    * Attempt to repair a failed selector using LLM with rich metadata
    */
   private async attemptRepair(action: AgentAction, actionType: string): Promise<string | null> {
-    if (!action.selector) {
+    // Only actions with selectors can be repaired
+    if (actionType === 'goto' || !('selector' in action)) {
       return null;
     }
 
@@ -305,9 +315,10 @@ export class AgentExecutor {
       const domSnapshot = await this.page!.content();
       
       // Extract metadata from the action
-      const metadata = (action as any).metadata as ActionMetadata | undefined;
+      const metadata = (action as Record<string, unknown>).metadata as ActionMetadata | undefined;
       
-      this.log(`Attempting to repair selector: ${action.selector}`, { 
+      const actionWithSelector = action as Extract<AgentAction, { selector: string }>;
+      this.log(`Attempting to repair selector: ${actionWithSelector.selector}`, { 
         intent: intent.intent, 
         stepIndex,
         metadata: metadata ? {
@@ -320,7 +331,7 @@ export class AgentExecutor {
 
       // Use LLM to repair the selector with rich context
       const repairResult = await llmService.repairSelector(
-        action.selector,
+        actionWithSelector.selector,
         intent.intent,
         domSnapshot,
         actionType,
@@ -408,7 +419,7 @@ export class AgentExecutor {
       // Ensure screenshots directory exists
       await fs.mkdir('./screenshots', { recursive: true });
       
-      await this.page.screenshot({ path: filepath, fullPage: true });
+      await this.page.screenshot({ path: filepath as `${string}.png`, fullPage: true });
       
       this.log(`Screenshot saved: ${filepath}`);
       return filepath;
@@ -421,11 +432,11 @@ export class AgentExecutor {
   /**
    * Log execution details
    */
-  private log(message: string, data?: any): void {
+  private log(message: string, data?: unknown): void {
     const logEntry = {
       timestamp: new Date().toISOString(),
       message,
-      ...data,
+      ...(data && typeof data === 'object' ? data : {}),
     };
     
     this.executionLogs.push(logEntry);
@@ -490,7 +501,7 @@ export async function executeAgentRun(agentId: string, runId: string): Promise<E
   const context: ExecutionContext = {
     agentId,
     runId,
-    agentConfig: JSON.parse(agent.agentConfig) as AgentAction[],
+    agentConfig: JSON.parse(agent.agentConfig || '[]') as AgentAction[],
     agentIntents: agent.agentIntents ? JSON.parse(agent.agentIntents) as AgentIntent[] : [],
     logins: decryptedLogins,
   };

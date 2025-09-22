@@ -116,7 +116,7 @@ async function main() {
             { action: 'click', selector: '.new-presentation' },
           ]),
           purposePrompt: 'Create a new presentation from a template',
-          status: 'DRAFT',
+          status: 'DRAFT' as const,
           ownerId: createdUsers[0].id,
         },
         {
@@ -131,7 +131,7 @@ async function main() {
             { action: 'click', selector: '.add-record' },
           ]),
           purposePrompt: 'Automate data entry in Airtable',
-          status: 'ACTIVE',
+          status: 'ACTIVE' as const,
           ownerId: createdUsers[1].id,
         },
       ];

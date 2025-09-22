@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { signIn } from "next-auth/react";
+import Image from "next/image";
 
 export default function RegisterPage() {
   const [email, setEmail] = useState("");
@@ -50,10 +51,10 @@ export default function RegisterPage() {
         setMessage("❌ Error: Invalid email or password");
       } else {
         setMessage("✅ Login successful! Redirecting...");
-        // Redirect to dashboard
-        window.location.href = "/";
+        // Redirect to tasks
+        window.location.href = "/tasks";
       }
-    } catch (error) {
+    } catch {
       setMessage("❌ Error: Login failed");
     }
     setLoading(false);
@@ -88,10 +89,12 @@ export default function RegisterPage() {
             justifyContent: "center",
             margin: "0 auto 16px auto"
           }}>
-            <img
+            <Image
               src="/logo.jpg"
               alt="App Logo"
-              style={{ width: "48px", height: "48px", borderRadius: "8px" }}
+              width={48}
+              height={48}
+              style={{ borderRadius: "8px" }}
             />
           </div>
           <h1 style={{ 
@@ -111,48 +114,56 @@ export default function RegisterPage() {
           </p>
         </div>
 
-        {/* Tab Navigation */}
+        {/* Simple Test Buttons */}
         <div style={{
-          display: "flex",
           marginBottom: "24px",
-          borderRadius: "8px",
-          overflow: "hidden",
-          border: "1px solid #ddd"
+          display: "flex",
+          gap: "10px"
         }}>
           <button
-            type="button"
-            onClick={() => setIsLogin(false)}
+            onClick={() => {
+              alert('Sign Up clicked!');
+              setIsLogin(false);
+            }}
             style={{
-              flex: 1,
-              padding: "12px",
-              backgroundColor: !isLogin ? "#007bff" : "#f8f9fa",
-              color: !isLogin ? "white" : "#333",
+              padding: "10px 20px",
+              backgroundColor: "#007bff",
+              color: "white",
               border: "none",
-              cursor: "pointer",
-              fontSize: "14px",
-              fontWeight: "500",
-              transition: "all 0.2s ease"
+              borderRadius: "4px",
+              cursor: "pointer"
             }}
           >
             Sign Up
           </button>
           <button
-            type="button"
-            onClick={() => setIsLogin(true)}
+            onClick={() => {
+              alert('Sign In clicked!');
+              setIsLogin(true);
+            }}
             style={{
-              flex: 1,
-              padding: "12px",
-              backgroundColor: isLogin ? "#007bff" : "#f8f9fa",
-              color: isLogin ? "white" : "#333",
+              padding: "10px 20px",
+              backgroundColor: "#28a745",
+              color: "white",
               border: "none",
-              cursor: "pointer",
-              fontSize: "14px",
-              fontWeight: "500",
-              transition: "all 0.2s ease"
+              borderRadius: "4px",
+              cursor: "pointer"
             }}
           >
             Sign In
           </button>
+        </div>
+
+        {/* Debug Info */}
+        <div style={{
+          marginBottom: "16px",
+          padding: "8px",
+          backgroundColor: "#f8f9fa",
+          borderRadius: "4px",
+          fontSize: "12px",
+          color: "#666"
+        }}>
+          Debug: isLogin = {isLogin.toString()}
         </div>
 
         {/* Forms */}
@@ -407,10 +418,10 @@ export default function RegisterPage() {
           </h4>
           <div style={{ color: "#666" }}>
             <p style={{ margin: "0 0 4px 0" }}>
-              <strong>Email:</strong> test@example.com
+              <strong>Email:</strong> alice@example.com
             </p>
             <p style={{ margin: 0 }}>
-              <strong>Password:</strong> secret123
+              <strong>Password:</strong> password123
             </p>
           </div>
         </div>

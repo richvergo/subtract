@@ -52,7 +52,7 @@ try {
 } catch (error) {
   console.error('❌ Environment validation failed:');
   if (error instanceof z.ZodError) {
-    error.errors.forEach((err) => {
+    error.issues.forEach((err) => {
       console.error(`  - ${err.path.join('.')}: ${err.message}`);
     });
   }

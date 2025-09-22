@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import { authOptions } from '@/lib/auth-config';
 import { db } from '@/lib/db';
-import { summarizeWithEventsSchema, type SummarizeWithEventsInput } from '@/lib/schemas/agents';
+import { summarizeWithEventsSchema } from '@/lib/schemas/agents';
+import { z } from 'zod';
 
 /**
  * POST /api/agents/[id]/summarize - Run enhanced LLM summarization with event logs and transcripts
@@ -71,31 +72,8 @@ export async function POST(
     const body = await request.json().catch(() => ({}));
     const validatedData = summarizeWithEventsSchema.parse(body);
 
-    // Enhanced LLM prompt construction with screenshot context
-    const eventLogText = JSON.stringify(validatedData.eventLog, null, 2);
     const transcriptText = validatedData.transcript || 'No transcript provided';
     
-    // Count screenshots for context
-    const screenshotCount = validatedData.eventLog.filter(event => event.screenshotUrl).length;
-    
-    const enhancedPrompt = `You are analyzing a recorded workflow for an automation agent named "${agent.name}".
-
-Here is the structured event log showing the user's actions with multi-signal capture:
-${eventLogText}
-
-Here is the user narration transcript:
-${transcriptText}
-
-${screenshotCount > 0 ? `Note: This workflow includes ${screenshotCount} screenshot(s) captured at key moments to provide visual context for the actions.` : ''}
-
-Please provide a clear, step-by-step summary of what the user did, including:
-1. Specific tools and websites used
-2. Key actions taken (clicks, typing, navigation)
-3. Outcomes and results achieved
-4. The overall workflow purpose
-5. Visual context from screenshots (when available)
-
-Make the summary specific and actionable, mentioning actual tool names, website URLs, and concrete actions rather than vague descriptions. When screenshots are available, reference them to provide richer context about the user interface and visual elements involved.`;
 
     // Enhanced LLM summarization - in a real implementation, this would call an LLM service
     const enhancedSummary = generateEnhancedSummary(validatedData.eventLog, transcriptText, agent.name);
@@ -129,7 +107,7 @@ Make the summary specific and actionable, mentioning actual tool names, website 
     
     if (error instanceof z.ZodError) {
       return NextResponse.json(
-        { error: 'Validation error', details: error.errors },
+        { error: 'Validation error', details: error.issues },
         { status: 400 }
       );
     }
@@ -145,10 +123,10 @@ Make the summary specific and actionable, mentioning actual tool names, website 
  * Generate enhanced summary based on event log and transcript
  * In production, this would call an actual LLM service
  */
-function generateEnhancedSummary(eventLog: any[], transcript: string, agentName: string): string {
+function generateEnhancedSummary(eventLog: unknown[], transcript: string, agentName: string): string {
   const events = eventLog || [];
-  const hasTranscript = transcript && transcript !== 'No transcript provided';
   const hasEventLog = events.length > 0;
+  const hasTranscript = transcript && transcript.trim().length > 0;
   
   let summary = `## Workflow Analysis: ${agentName}\n\n`;
   
@@ -180,29 +158,30 @@ function generateEnhancedSummary(eventLog: any[], transcript: string, agentName:
   summary += `**Step-by-Step Actions:**\n`;
   
   events.forEach((event, index) => {
-    summary += `${index + 1}. **${event.action}**`;
+    const eventData = event as Record<string, unknown>;
+    summary += `${index + 1}. **${eventData.action}**`;
     
-    if (event.url && event.url !== events[index - 1]?.url) {
-      summary += ` on ${event.url}`;
+    if (eventData.url && eventData.url !== (events[index - 1] as Record<string, unknown>)?.url) {
+      summary += ` on ${eventData.url}`;
     }
     
-    if (event.target) {
-      summary += ` targeting "${event.target}"`;
+    if (eventData.target) {
+      summary += ` targeting "${eventData.target}"`;
     }
     
-    if (event.value) {
-      summary += ` with value "${event.value}"`;
+    if (eventData.value) {
+      summary += ` with value "${eventData.value}"`;
     }
     
-    if (event.elementType) {
-      summary += ` (${event.elementType})`;
+    if (eventData.elementType) {
+      summary += ` (${eventData.elementType})`;
     }
     
-    if (event.elementText) {
-      summary += ` - "${event.elementText}"`;
+    if (eventData.elementText) {
+      summary += ` - "${eventData.elementText}"`;
     }
     
-    if (event.screenshotUrl) {
+    if (eventData.screenshotUrl) {
       summary += ` 📸 [Screenshot captured]`;
     }
     
@@ -212,14 +191,15 @@ function generateEnhancedSummary(eventLog: any[], transcript: string, agentName:
   summary += `\n**Workflow Summary:** The user completed a multi-step process involving `;
   
   // Extract unique URLs and tools
-  const urls = [...new Set(events.map(e => e.url).filter(Boolean))];
+  const urls = [...new Set(events.map(e => (e as Record<string, unknown>).url).filter(Boolean))];
   const tools = urls.map(url => {
-    if (url.includes('docs.google.com')) return 'Google Docs';
-    if (url.includes('slides.google.com')) return 'Google Slides';
-    if (url.includes('sheets.google.com')) return 'Google Sheets';
-    if (url.includes('canva.com')) return 'Canva';
-    if (url.includes('figma.com')) return 'Figma';
-    return new URL(url).hostname;
+    const urlStr = url as string;
+    if (urlStr.includes('docs.google.com')) return 'Google Docs';
+    if (urlStr.includes('slides.google.com')) return 'Google Slides';
+    if (urlStr.includes('sheets.google.com')) return 'Google Sheets';
+    if (urlStr.includes('canva.com')) return 'Canva';
+    if (urlStr.includes('figma.com')) return 'Figma';
+    return new URL(urlStr).hostname;
   });
   
   if (tools.length > 0) {

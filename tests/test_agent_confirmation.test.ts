@@ -8,11 +8,11 @@ import { RunStatus, AgentStatus } from '@prisma/client';
 import { confirmAgentRunSchema, rejectAgentRunSchema } from '../src/lib/schemas/agents';
 
 describe('Agent Confirmation Tests', () => {
-  let testUser: any;
-  let otherUser: any;
-  let testLogin: any;
-  let testAgent: any;
-  let agentRun: any;
+  let testUser: unknown;
+  let otherUser: unknown;
+  let testLogin: unknown;
+  let testAgent: unknown;
+  let agentRun: unknown;
 
   beforeEach(async () => {
     // Create test users
@@ -290,7 +290,7 @@ describe('Agent Confirmation Tests', () => {
   describe('Multiple Runs Confirmation', () => {
     it('should handle multiple runs with different confirmation statuses', async () => {
       // Create additional runs
-      const run2 = await testDb.agentRun.create({
+      await testDb.agentRun.create({
         data: {
           agentId: testAgent.id,
           status: RunStatus.COMPLETED,
@@ -299,7 +299,7 @@ describe('Agent Confirmation Tests', () => {
         },
       });
 
-      const run3 = await testDb.agentRun.create({
+      await testDb.agentRun.create({
         data: {
           agentId: testAgent.id,
           status: RunStatus.FAILED,

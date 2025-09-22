@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import { authOptions } from '@/lib/auth-config';
 import { db } from '@/lib/db';
 import { SessionManager } from '@/lib/session-manager';
 
@@ -9,7 +9,7 @@ import { SessionManager } from '@/lib/session-manager';
  */
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await getServerSession(authOptions);
@@ -32,7 +32,7 @@ export async function POST(
       );
     }
 
-    const loginId = params.id;
+    const { id: loginId } = await params;
     const login = await db.login.findFirst({
       where: { 
         id: loginId,
@@ -50,7 +50,22 @@ export async function POST(
     const body = await request.json();
     const { sessionData, currentUrl, pageTitle } = body;
 
-    if (!sessionData) {
+    // If sessionData is 'auto-capture', we'll capture it from the browser
+    let actualSessionData = sessionData;
+    
+    if (sessionData === 'auto-capture') {
+      // For now, we'll create a placeholder session data
+      // In a real implementation, you'd capture this from the actual browser session
+      actualSessionData = {
+        cookies: [],
+        localStorage: {},
+        sessionStorage: {},
+        userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
+        timestamp: new Date().toISOString()
+      };
+    }
+
+    if (!actualSessionData) {
       return NextResponse.json(
         { error: 'Session data is required' },
         { status: 400 }
@@ -75,8 +90,8 @@ export async function POST(
     }
 
     // Encrypt and store session data
-    const encryptedSessionData = SessionManager.encryptSessionData(sessionData);
-    const sessionExpiry = SessionManager.calculateSessionExpiry(sessionData);
+    const encryptedSessionData = SessionManager.encryptSessionData(actualSessionData);
+    const sessionExpiry = SessionManager.calculateSessionExpiry(actualSessionData);
 
     // Update login with new session data
     await db.login.update({

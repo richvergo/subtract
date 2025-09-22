@@ -5,11 +5,14 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import { authOptions } from '@/lib/auth-config';
 import { db } from '@/lib/db';
-import { createLoginSchema, type CreateLoginInput } from '@/lib/schemas/agents';
+import { createLoginSchema } from '@/lib/schemas/agents';
 import { encryptLoginCredentials, maskLoginCredentials } from '@/lib/encryption';
-import { LoginHealthChecker } from '@/lib/login-health-checker';
+// LoginHealthChecker removed - using screen recording approach instead
+import { writeFile, mkdir } from 'fs/promises';
+import { join } from 'path';
+import { existsSync } from 'fs';
 
 /**
  * GET /api/logins - List user's logins (with masked credentials)
@@ -86,16 +89,94 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const body = await request.json();
-    const validatedData = createLoginSchema.parse(body);
+    // Handle both JSON and FormData requests
+    let validatedData;
+    let recordingFile: File | null = null;
+    
+    const contentType = request.headers.get('content-type');
+    console.log('Content-Type:', contentType);
+    
+    if (contentType?.includes('multipart/form-data')) {
+      // Handle FormData (with recording)
+      const formData = await request.formData();
+      const name = formData.get('name') as string;
+      const loginUrl = formData.get('loginUrl') as string;
+      const username = formData.get('username') as string;
+      const password = formData.get('password') as string;
+      const testOnCreate = formData.get('testOnCreate') === 'true';
+      recordingFile = formData.get('recording') as File;
+      
+      console.log('FormData received:', { name, loginUrl, username, testOnCreate, hasRecording: !!recordingFile });
+      
+      // Validate required fields
+      if (!name || !loginUrl || !username || !password) {
+        return NextResponse.json(
+          { error: 'Missing required fields: name, loginUrl, username, and password are required' },
+          { status: 400 }
+        );
+      }
+      
+      validatedData = {
+        name,
+        loginUrl,
+        username,
+        password,
+        testOnCreate,
+        // templateId removed - using screen recording approach instead
+        customConfig: null,
+        oauthToken: null
+      };
+    } else {
+      // Handle JSON (existing behavior)
+      const body = await request.json();
+      validatedData = createLoginSchema.parse(body);
+    }
+
+    // Handle recording file if provided
+    let recordingUrl: string | null = null;
+    if (recordingFile && recordingFile.size > 0) {
+      try {
+        console.log('Processing recording file:', { size: recordingFile.size, type: recordingFile.type });
+        
+        // Ensure uploads directory exists
+        const uploadsDir = join(process.cwd(), 'uploads', 'logins');
+        if (!existsSync(uploadsDir)) {
+          await mkdir(uploadsDir, { recursive: true });
+        }
+
+        // Generate unique filename
+        const timestamp = Date.now();
+        const filename = `login_${timestamp}.webm`;
+        const filePath = join(uploadsDir, filename);
+
+        // Save file to disk
+        const bytes = await recordingFile.arrayBuffer();
+        const buffer = Buffer.from(bytes);
+        await writeFile(filePath, buffer);
+
+        recordingUrl = `/uploads/logins/${filename}`;
+        console.log('Recording saved:', recordingUrl);
+      } catch (error) {
+        console.error('Failed to save recording file:', error);
+        // Continue without recording rather than failing
+      }
+    } else {
+      console.log('No recording file provided or file is empty');
+    }
 
     // Encrypt credentials before saving
     const encryptedCredentials = encryptLoginCredentials({
       username: validatedData.username,
-      password: validatedData.password,
-      oauthToken: validatedData.oauthToken,
+      password: validatedData.password || undefined,
+      oauthToken: validatedData.oauthToken || undefined,
     });
 
+    console.log('Creating login with data:', { 
+      name: validatedData.name, 
+      loginUrl: validatedData.loginUrl, 
+      hasRecording: !!recordingUrl 
+    });
+    
     const login = await db.login.create({
       data: {
         name: validatedData.name,
@@ -103,46 +184,38 @@ export async function POST(request: NextRequest) {
         username: encryptedCredentials.username,
         password: encryptedCredentials.password,
         oauthToken: encryptedCredentials.oauthToken,
-        templateId: validatedData.templateId,
-        customConfig: validatedData.customConfig ? JSON.stringify(validatedData.customConfig) : null,
+        // templateId removed - using screen recording approach instead
+        recordingUrl: recordingUrl,
         ownerId: user.id,
       },
     });
+    
+    console.log('Login created successfully:', login.id);
 
-    // Test login immediately if requested
-    let testResult = null;
-    if (validatedData.testOnCreate) {
+    // If recording was provided, trigger analysis
+    if (recordingUrl) {
+      console.log('Triggering login analysis...');
       try {
-        console.log(`🧪 Testing login immediately for: ${login.name}`);
-        const healthChecker = new LoginHealthChecker();
-        testResult = await healthChecker.checkLoginHealth(login.id);
-        await healthChecker.close();
-        
-        // Update login with test results
-        await db.login.update({
-          where: { id: login.id },
-          data: {
-            status: testResult.status,
-            lastCheckedAt: testResult.lastChecked,
-            lastSuccessAt: testResult.success ? testResult.lastChecked : null,
-            lastFailureAt: testResult.success ? null : testResult.lastChecked,
-            failureCount: testResult.success ? 0 : 1,
-            errorMessage: testResult.errorMessage,
+        // Call the analysis endpoint
+        const analysisResponse = await fetch(`${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api/logins/${login.id}/analyze`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
           },
         });
-      } catch (error) {
-        console.error('Failed to test login immediately:', error);
-        testResult = {
-          success: false,
-          status: 'BROKEN' as const,
-          errorMessage: error instanceof Error ? error.message : 'Test failed',
-          responseTime: 0,
-          lastChecked: new Date(),
-        };
+        
+        if (analysisResponse.ok) {
+          console.log('Login analysis completed successfully');
+        } else {
+          console.error('Login analysis failed:', await analysisResponse.text());
+        }
+      } catch (analysisError) {
+        console.error('Failed to trigger login analysis:', analysisError);
+        // Continue without failing the login creation
       }
     }
 
-    // Return masked credentials with test result
+    // Return masked credentials
     const maskedLogin = {
       ...login,
       ...maskLoginCredentials({
@@ -154,13 +227,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ 
       login: maskedLogin,
-      testResult: testResult ? {
-        success: testResult.success,
-        status: testResult.status,
-        errorMessage: testResult.errorMessage,
-        responseTime: testResult.responseTime,
-        lastChecked: testResult.lastChecked,
-      } : null
+      message: 'Login created successfully'
     }, { status: 201 });
   } catch (error) {
     console.error('Error creating login:', error);

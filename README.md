@@ -4,12 +4,29 @@ vergo is a modern AI agent automation platform that enables users to create, man
 
 ## Features
 
-- **🤖 AI Agent Creation**: Create agents by recording workflows with rich DOM metadata capture
-- **🧠 LLM-Powered Intelligence**: Automatic intent generation and self-healing selector repair
-- **🔐 Secure Credential Management**: Encrypted storage of login credentials for agent authentication
-- **⚡ Smart Execution**: Two-stage execution with primary automation and LLM fallback repair
-- **📊 Rich Metadata**: Capture DOM elements, timestamps, and contextual information for robust automation
-- **🎨 Modern UI**: Clean, responsive interface built with Next.js 15, React 19, and custom CSS
+### 🤖 **Simplified Agent Creation**
+- **4-Step Wizard**: Choose login → Record workflow → AI summarizes → Test automation
+- **🧠 LLM-Powered Analysis**: AI automatically understands and summarizes recorded workflows
+- **✅ Confidence Building**: Clear summaries that show the AI understands your process
+- **🧪 Live Testing**: Agents actually run your workflow to prove they work
+
+### 🔐 **Smart Login Management**
+- **📹 Screen Recording**: Record login processes for AI analysis
+- **🤖 Login Agents**: AI creates automated login workflows from recordings
+- **🔒 Secure Storage**: AES-256 encrypted credential storage
+- **🔄 Auto-Detection**: AI analyzes recordings to extract login steps and selectors
+
+### ⚡ **Intelligent Automation**
+- **🧠 LLM Integration**: OpenAI-powered workflow analysis and selector repair
+- **📊 Rich Metadata**: Capture DOM elements, timestamps, and contextual information
+- **🔄 Self-Healing**: Automatic selector repair when automation fails
+- **🎯 Smart Execution**: Two-stage execution with primary automation and LLM fallback
+
+### 🎨 **Modern User Experience**
+- **📱 Responsive Design**: Clean interface built with Next.js 15, React 19
+- **🎯 Task-Focused**: Streamlined navigation (Tasks → Agents → Logins)
+- **⚡ Real-Time Updates**: SWR-powered data fetching and caching
+- **🔐 Secure Authentication**: NextAuth.js with JWT strategy
 
 ## 📚 Documentation & Guidelines
 
@@ -106,19 +123,27 @@ src/
 - `POST /api/agents/[id]/annotate` - Generate LLM annotations for agent
 - `POST /api/agents/[id]/repair` - Repair agent with LLM fallback
 
-### Recording & Processing
-- `POST /api/agents/record` - Single-step agent creation from browser recording with LLM annotation
+### 🤖 **New Agent Creation (4-Step Wizard)**
+- `POST /api/agents/record` - Create agent with login association and recording
+- `POST /api/agents/[id]/summarize-workflow` - Generate AI summary of recorded workflow
+- `POST /api/agents/[id]/test-workflow` - Test agent workflow execution
+
+### 🧠 **LLM Integration**
+- `POST /api/agents/[id]/summarize-workflow` - AI workflow summarization
+- `POST /api/agents/[id]/test-workflow` - Live workflow testing
+- `POST /api/logins/[id]/analyze` - AI analysis of login recordings
 
 ### Agent Runs
 - `POST /api/agent-runs/[id]/confirm` - Confirm successful agent run
 - `POST /api/agent-runs/[id]/reject` - Reject failed agent run
 
-### Login Management
+### 🔐 **Smart Login Management**
 - `GET /api/logins` - List user's login credentials (masked)
-- `POST /api/logins` - Add new login credentials (encrypted)
+- `POST /api/logins` - Add new login with screen recording and AI analysis
 - `GET /api/logins/[id]` - Get login details
 - `PUT /api/logins/[id]` - Update login credentials
 - `DELETE /api/logins/[id]` - Delete login
+- `POST /api/logins/[id]/analyze` - **NEW**: AI analysis of login recording
 - `POST /api/logins/health` - Test all user's login credentials
 - `GET /api/logins/health` - Get health status of all user's logins
 - `POST /api/logins/[id]/health` - Test specific login credentials

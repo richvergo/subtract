@@ -1,14 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import { authOptions } from '@/lib/auth-config';
 import { db } from '@/lib/db';
-import { llmService } from '@/lib/llm-service';
-import { recordWorkflowSchema, recordWorkflowWithEventsSchema, type RecordWorkflowInput, type RecordWorkflowWithEventsInput, type AgentIntent } from '@/lib/schemas/agents';
 import { getUserEmailForQuery } from '@/lib/auth';
 import { writeFile, mkdir } from 'fs/promises';
 import { join } from 'path';
 import { existsSync } from 'fs';
-import { processInlineScreenshots } from '@/lib/screenshot-storage';
 
 // Configuration constants
 const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100MB
@@ -43,11 +40,30 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Parse multipart form data
-    const formData = await request.formData();
-    const name = formData.get('name') as string;
-    const purposePrompt = formData.get('purposePrompt') as string;
-    const file = formData.get('file') as File;
+    // Handle both JSON and FormData requests
+    let name: string;
+    let purposePrompt: string;
+    let loginId: string;
+    let file: File | null = null;
+    let recordedSteps: unknown[] = [];
+    
+    const contentType = request.headers.get('content-type');
+    
+    if (contentType?.includes('multipart/form-data')) {
+      // Handle FormData (with recording file)
+      const formData = await request.formData();
+      name = formData.get('name') as string;
+      purposePrompt = formData.get('purposePrompt') as string;
+      loginId = formData.get('loginId') as string;
+      file = formData.get('file') as File;
+    } else {
+      // Handle JSON (for tests)
+      const body = await request.json();
+      name = body.name;
+      purposePrompt = body.purposePrompt;
+      loginId = body.loginIds?.[0] || body.loginId;
+      recordedSteps = body.recordedSteps || [];
+    }
 
     // Validate required fields
     if (!name) {
@@ -57,26 +73,29 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!file) {
+    // Only require file in multipart mode
+    if (contentType?.includes('multipart/form-data') && !file) {
       return NextResponse.json(
         { error: 'No file uploaded' },
         { status: 400 }
       );
     }
 
-    // Validate file
-    if (file.size > MAX_FILE_SIZE) {
-      return NextResponse.json(
-        { error: `File too large. Maximum size is ${MAX_FILE_SIZE / (1024 * 1024)}MB` },
-        { status: 400 }
-      );
-    }
+    // Validate file (only if provided)
+    if (file) {
+      if (file.size > MAX_FILE_SIZE) {
+        return NextResponse.json(
+          { error: `File too large. Maximum size is ${MAX_FILE_SIZE / (1024 * 1024)}MB` },
+          { status: 400 }
+        );
+      }
 
-    if (!ALLOWED_MIME_TYPES.includes(file.type)) {
-      return NextResponse.json(
-        { error: `Invalid file type. Allowed types: ${ALLOWED_MIME_TYPES.join(', ')}` },
-        { status: 400 }
-      );
+      if (!ALLOWED_MIME_TYPES.includes(file.type)) {
+        return NextResponse.json(
+          { error: `Invalid file type. Allowed types: ${ALLOWED_MIME_TYPES.join(', ')}` },
+          { status: 400 }
+        );
+      }
     }
 
     // Ensure uploads directory exists
@@ -84,39 +103,55 @@ export async function POST(request: NextRequest) {
       await mkdir(UPLOADS_DIR, { recursive: true });
     }
 
-    // Generate unique filename
-    const timestamp = Date.now();
-    const fileExtension = file.type === 'video/webm' ? 'webm' : 'mp4';
-    const filename = `agent_${timestamp}.${fileExtension}`;
-    const filePath = join(UPLOADS_DIR, filename);
+    // Handle file saving (only if file provided)
+    let filePath: string | null = null;
+    if (file) {
+      // Generate unique filename
+      const timestamp = Date.now();
+      const fileExtension = file.type === 'video/webm' ? 'webm' : 'mp4';
+      const filename = `agent_${timestamp}.${fileExtension}`;
+      filePath = join(UPLOADS_DIR, filename);
 
-    // Save file to disk
-    try {
-      const bytes = await file.arrayBuffer();
-      const buffer = Buffer.from(bytes);
-      await writeFile(filePath, buffer);
-    } catch (error) {
-      console.error('Failed to save file:', error);
-      return NextResponse.json(
-        { error: 'Failed to save uploaded file' },
-        { status: 500 }
-      );
+      // Save file to disk
+      try {
+        const bytes = await file.arrayBuffer();
+        const buffer = Buffer.from(bytes);
+        await writeFile(filePath, buffer);
+      } catch (error) {
+        console.error('Failed to save file:', error);
+        return NextResponse.json(
+          { error: 'Failed to save uploaded file' },
+          { status: 500 }
+        );
+      }
     }
 
-    // Create agent with recording URL
+    // Create agent with recording URL and login association
     const result = await db.$transaction(async (tx) => {
       // Create the agent
       const agent = await tx.agent.create({
         data: {
           name: name.trim(),
-          description: `Agent created with screen recording (${Math.round(file.size / 1024)}KB)`,
+          description: file 
+            ? `Agent created with screen recording (${Math.round(file.size / 1024)}KB)`
+            : `Agent created with recorded steps (${recordedSteps.length} steps)`,
           purposePrompt: purposePrompt?.trim() || "Workflow will be defined after recording analysis",
-          agentConfig: JSON.stringify([]), // Empty config for now
+          agentConfig: JSON.stringify(recordedSteps.length > 0 ? recordedSteps : []), // Use recordedSteps if available
           agentIntents: JSON.stringify([]), // Empty intents for now
-          recordingUrl: `/uploads/agents/${filename}`,
+          recordingUrl: filePath ? `/uploads/agents/${filePath.split('/').pop()}` : null,
           ownerId: user.id,
         },
       });
+
+      // Associate with login if provided
+      if (loginId) {
+        await tx.agentLogin.create({
+          data: {
+            agentId: agent.id,
+            loginId: loginId,
+          },
+        });
+      }
 
       return agent;
     });
@@ -167,12 +202,12 @@ export async function POST(request: NextRequest) {
       message: 'Agent created with recording successfully'
     }, { status: 201 });
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('[agents/record] Error', {
-      message: error?.message,
-      stack: error?.stack,
-      name: error?.name,
-      cause: error?.cause,
+      message: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined,
+      name: error instanceof Error ? error.name : undefined,
+      cause: error instanceof Error ? error.cause : undefined,
     });
 
     return NextResponse.json(

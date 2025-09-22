@@ -3,105 +3,129 @@
 import { useState, useRef, useEffect, useCallback, memo } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import dynamic from "next/dynamic"
+import useSWR from 'swr'
 
-// Multi-step Agent Creation Wizard
-// Follows the corrected golden path: Name → Record → Summarize → Context → Review → Live
-// This replaces the single-page agent creation with a guided wizard flow
-//
-// Corrected Golden Path UX Flow:
-// 1. Name: User defines agent name only (no purpose prompt)
-// 2. Record: User records screen workflow with optional audio
-// 3. Summarize: AI processes recording (handled in review page)
-// 4. Context: User provides usage context (handled in review page)
-// 5. Review: User reviews and approves/rejects (handled in review page)
-// 6. Live: Agent becomes active (handled in review page)
-//
-// Integration with Backend:
-// - POST /api/agents/record: Creates agent in DRAFT status with recording
-// - Redirects to /agents/[id]/review for steps 3-6
-// - Review page handles: /summarize, /review endpoints
+// New 4-Step Agent Creation Wizard
+// 1. Choose Login: Select which login to use for this agent
+// 2. Record Workflow: Capture the workflow to automate
+// 3. LLM Summary: AI summarizes what it understood
+// 4. Test Workflow: Agent replicates the process to prove it works
 
-// Step definitions for the wizard
+// Step definitions for the new wizard
 const STEPS = [
-  { id: 1, title: "Name", description: "Define your agent" },
-  { id: 2, title: "Record", description: "Capture your workflow" },
-  { id: 3, title: "Summarize", description: "AI processes recording" },
-  { id: 4, title: "Context", description: "Add usage details" },
-  { id: 5, title: "Review", description: "Final approval" },
-  { id: 6, title: "Live", description: "Agent is active" }
+  { id: 1, title: "Choose Login", description: "Select login credentials" },
+  { id: 2, title: "Record Workflow", description: "Capture your process" },
+  { id: 3, title: "LLM Summary", description: "AI understands your workflow" },
+  { id: 4, title: "Test Workflow", description: "Verify automation works" }
 ] as const
 
 type StepId = typeof STEPS[number]['id']
 
-// Step 1: Name Your Agent - Memoized to prevent re-mounting
-interface Step1NameProps {
-  agentName: string
-  onAgentNameChange: (e: React.ChangeEvent<HTMLInputElement>) => void
+// Fetcher for logins
+const fetcher = (url: string) => fetch(url).then((res) => res.json())
+
+// Step 1: Choose Login - Memoized to prevent re-mounting
+interface Step1LoginProps {
+  selectedLoginId: string
+  onLoginSelect: (loginId: string) => void
   isStep1Valid: () => boolean
   onNextStep: () => void
 }
 
-const Step1Name = memo(({ agentName, onAgentNameChange, isStep1Valid, onNextStep }: Step1NameProps) => (
-  <div style={{
-    backgroundColor: "#fff",
-    borderRadius: "8px",
-    border: "1px solid #dee2e6",
-    padding: "32px",
-    maxWidth: "600px",
-    margin: "0 auto"
-  }}>
-    <h2 style={{
-      fontSize: "24px",
-      fontWeight: "600",
-      margin: "0 0 8px 0",
-      color: "#333"
-    }}>
-      Step 1: Name Your Agent
-    </h2>
-    <p style={{
-      color: "#666",
-      fontSize: "16px",
-      margin: "0 0 32px 0"
-    }}>
-      Give your agent a descriptive name. You'll define what it does after recording the workflow.
-    </p>
+const Step1Login = memo(({ selectedLoginId, onLoginSelect, isStep1Valid, onNextStep }: Step1LoginProps) => {
+  const { data: logins, error, isLoading } = useSWR('/api/logins', fetcher)
 
-    <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
-      <div>
-        <label style={{ 
-          display: "block", 
-          marginBottom: "8px",
-          fontSize: "14px",
-          fontWeight: "600",
-          color: "#495057"
-        }}>
-          Agent Name *
-        </label>
-        <input
-          type="text"
-          value={agentName}
-          onChange={onAgentNameChange}
-          placeholder="Enter a descriptive name for your agent"
-          required
-          autoComplete="off"
-          style={{ 
-            width: "100%", 
-            padding: "12px 16px", 
-            border: "1px solid #ced4da", 
-            borderRadius: "6px",
-            fontSize: "14px",
-            transition: "border-color 0.2s ease, box-shadow 0.2s ease"
-          }}
-        />
-        {!isStep1Valid() && (
-          <p style={{
-            fontSize: "12px",
-            color: "#dc3545",
-            margin: "4px 0 0 0"
+  if (isLoading) return <div>Loading logins...</div>
+  if (error) return <div>Error loading logins</div>
+
+  return (
+    <div style={{
+      backgroundColor: "#fff",
+      borderRadius: "8px",
+      border: "1px solid #dee2e6",
+      padding: "32px",
+      maxWidth: "600px",
+      margin: "0 auto"
+    }}>
+      <h2 style={{
+        fontSize: "24px",
+        fontWeight: "600",
+        margin: "0 0 8px 0",
+        color: "#333"
+      }}>
+        Step 1: Choose Login
+      </h2>
+      <p style={{
+        color: "#666",
+        fontSize: "16px",
+        margin: "0 0 32px 0"
+      }}>
+        Select which login credentials this agent should use to access the system.
+      </p>
+
+      <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+        {logins?.logins?.map((login: { id: string; name: string; loginUrl: string }) => (
+          <div
+            key={login.id}
+            onClick={() => onLoginSelect(login.id)}
+            style={{
+              padding: "16px",
+              border: selectedLoginId === login.id ? "2px solid #007bff" : "1px solid #dee2e6",
+              borderRadius: "8px",
+              cursor: "pointer",
+              backgroundColor: selectedLoginId === login.id ? "#f8f9ff" : "#fff",
+              transition: "all 0.2s ease"
+            }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div>
+                <h4 style={{ margin: "0 0 4px 0", fontSize: "16px", fontWeight: "600" }}>
+                  {login.name}
+                </h4>
+                <p style={{ margin: "0", fontSize: "14px", color: "#666" }}>
+                  {login.loginUrl}
+                </p>
+              </div>
+              <div style={{
+                width: "20px",
+                height: "20px",
+                borderRadius: "50%",
+                border: selectedLoginId === login.id ? "2px solid #007bff" : "2px solid #dee2e6",
+                backgroundColor: selectedLoginId === login.id ? "#007bff" : "transparent",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: "#fff",
+                fontSize: "12px"
+              }}>
+                {selectedLoginId === login.id && "✓"}
+              </div>
+            </div>
+          </div>
+        ))}
+        
+        {(!logins?.logins || logins.logins.length === 0) && (
+          <div style={{
+            padding: "24px",
+            textAlign: "center",
+            color: "#666",
+            backgroundColor: "#f8f9fa",
+            borderRadius: "8px",
+            border: "1px solid #e9ecef"
           }}>
-            Agent name is required
-          </p>
+            <p style={{ margin: "0 0 16px 0" }}>No logins available</p>
+            <Link 
+              href="/logins" 
+              style={{ 
+                color: "#007bff", 
+                textDecoration: "none",
+                fontSize: "14px",
+                fontWeight: "500"
+              }}
+            >
+              Create a login first →
+            </Link>
+          </div>
         )}
       </div>
 
@@ -143,10 +167,10 @@ const Step1Name = memo(({ agentName, onAgentNameChange, isStep1Valid, onNextStep
         </button>
       </div>
     </div>
-  </div>
-))
+  )
+})
 
-Step1Name.displayName = 'Step1Name'
+Step1Login.displayName = 'Step1Login'
 
 export default function CreateAgentPage() {
   const router = useRouter()
@@ -155,24 +179,24 @@ export default function CreateAgentPage() {
   const [currentStep, setCurrentStep] = useState<StepId>(1)
   const [agentId, setAgentId] = useState<string | null>(null)
   
-  // Step 1: Agent Name - Controlled input state
-  const [agentName, setAgentName] = useState("")
-  
-  // Memoized event handler to prevent re-renders
-  const handleAgentNameChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    console.log('Input changed:', e.target.value)
-    setAgentName(e.target.value)
-  }, [])
-  
+  // Step 1: Login Selection
+  const [selectedLoginId, setSelectedLoginId] = useState("")
   
   // Step 2: Recording
   const [isRecording, setIsRecording] = useState(false)
   const [hasRecording, setHasRecording] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   
+  // Step 3: LLM Summary
+  const [workflowSummary, setWorkflowSummary] = useState("")
+  const [isSummarizing, setIsSummarizing] = useState(false)
+  
+  // Step 4: Testing
+  const [testResult, setTestResult] = useState<{ success: boolean; error?: string } | null>(null)
+  const [isTesting, setIsTesting] = useState(false)
+  
   // Common state
   const [error, setError] = useState("")
-  const [isLoading, setIsLoading] = useState(false)
   
   // Recording refs
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
@@ -181,14 +205,14 @@ export default function CreateAgentPage() {
   const recordingBlobRef = useRef<Blob | null>(null)
 
   // Validation for each step
-  const isStep1Valid = () => {
-    return agentName.trim() !== ""
-  }
+  const isStep1Valid = () => selectedLoginId !== ""
   const isStep2Valid = hasRecording && !isRecording
+  const isStep3Valid = () => workflowSummary !== ""
+  const isStep4Valid = () => testResult?.success === true
 
   // Step navigation functions
   const nextStep = () => {
-    if (currentStep < 6) {
+    if (currentStep < 4) {
       setCurrentStep((currentStep + 1) as StepId)
     }
   }
@@ -196,6 +220,65 @@ export default function CreateAgentPage() {
   const prevStep = () => {
     if (currentStep > 1) {
       setCurrentStep((currentStep - 1) as StepId)
+    }
+  }
+
+  // Step 1: Login selection handler
+  const handleLoginSelect = useCallback((loginId: string) => {
+    setSelectedLoginId(loginId)
+  }, [])
+
+  // Step 3: Generate LLM summary
+  const handleGenerateSummary = async () => {
+    if (!agentId) return
+    
+    setIsSummarizing(true)
+    setError("")
+    
+    try {
+      const response = await fetch(`/api/agents/${agentId}/summarize-workflow`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include'
+      })
+      
+      if (!response.ok) {
+        throw new Error('Failed to generate summary')
+      }
+      
+      const data = await response.json()
+      setWorkflowSummary(data.summary)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to generate summary')
+    } finally {
+      setIsSummarizing(false)
+    }
+  }
+
+  // Step 4: Test workflow
+  const handleTestWorkflow = async () => {
+    if (!agentId) return
+    
+    setIsTesting(true)
+    setError("")
+    
+    try {
+      const response = await fetch(`/api/agents/${agentId}/test-workflow`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include'
+      })
+      
+      if (!response.ok) {
+        throw new Error('Failed to test workflow')
+      }
+      
+      const data = await response.json()
+      setTestResult(data.result)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to test workflow')
+    } finally {
+      setIsTesting(false)
     }
   }
 
@@ -267,14 +350,20 @@ export default function CreateAgentPage() {
       return
     }
 
+    if (!selectedLoginId) {
+      setError("Please select a login first")
+      return
+    }
+
     setIsSaving(true)
     setError("")
 
     try {
       // Build FormData object for multipart upload
       const formData = new FormData()
-      formData.append("name", agentName.trim())
+      formData.append("name", `Agent ${Date.now()}`) // Auto-generate name
       formData.append("file", recordingBlobRef.current, "recording.webm")
+      formData.append("loginId", selectedLoginId) // Include selected login
 
       // Send to the record endpoint with FormData
       const response = await fetch('/api/agents/record', {
@@ -296,8 +385,9 @@ export default function CreateAgentPage() {
         throw new Error("Invalid response: agent ID not found")
       }
 
-      // Redirect to review page for steps 3-6
-      router.push(`/agents/${newAgent.id}/review`)
+      // Set agent ID and move to next step
+      setAgentId(newAgent.id)
+      nextStep()
       
     } catch (err) {
       console.error('Error saving agent:', err)
@@ -376,6 +466,260 @@ export default function CreateAgentPage() {
     </div>
   )
 
+
+  // Step 3: LLM Summary
+  const Step3Summary = () => (
+    <div style={{
+      backgroundColor: "#fff",
+      borderRadius: "8px",
+      border: "1px solid #dee2e6",
+      padding: "32px",
+      maxWidth: "600px",
+      margin: "0 auto"
+    }}>
+      <h2 style={{
+        fontSize: "24px",
+        fontWeight: "600",
+        margin: "0 0 8px 0",
+        color: "#333"
+      }}>
+        Step 3: LLM Summary
+      </h2>
+      <p style={{
+        color: "#666",
+        fontSize: "16px",
+        margin: "0 0 32px 0"
+      }}>
+        AI analyzes your recording and summarizes what it understood about your workflow.
+      </p>
+
+      {!workflowSummary ? (
+        <div style={{
+          padding: "24px",
+          backgroundColor: "#f8f9fa",
+          borderRadius: "8px",
+          border: "1px solid #e9ecef",
+          textAlign: "center"
+        }}>
+          <button
+            onClick={handleGenerateSummary}
+            disabled={isSummarizing}
+            style={{
+              background: isSummarizing ? "#6c757d" : "#007bff",
+              color: "#fff",
+              padding: "12px 24px",
+              border: "none",
+              borderRadius: "6px",
+              fontSize: "16px",
+              fontWeight: "600",
+              cursor: isSummarizing ? "not-allowed" : "pointer",
+              transition: "background-color 0.2s ease",
+              opacity: isSummarizing ? 0.6 : 1
+            }}
+          >
+            {isSummarizing ? "Analyzing..." : "Generate Summary"}
+          </button>
+        </div>
+      ) : (
+        <div style={{
+          padding: "20px",
+          backgroundColor: "#f8f9ff",
+          borderRadius: "8px",
+          border: "1px solid #007bff",
+          marginBottom: "24px"
+        }}>
+          <h4 style={{
+            fontSize: "16px",
+            fontWeight: "600",
+            margin: "0 0 12px 0",
+            color: "#007bff"
+          }}>
+            🤖 AI Summary
+          </h4>
+          <div style={{
+            fontSize: "14px",
+            lineHeight: "1.6",
+            color: "#333",
+            whiteSpace: "pre-wrap"
+          }}>
+            {workflowSummary}
+          </div>
+        </div>
+      )}
+
+      <div style={{ 
+        display: "flex", 
+        justifyContent: "space-between", 
+        alignItems: "center",
+        paddingTop: "24px",
+        borderTop: "1px solid #f1f3f4"
+      }}>
+        <button
+          onClick={prevStep}
+          style={{
+            background: "transparent",
+            color: "#6c757d",
+            padding: "12px 24px",
+            border: "1px solid #dee2e6",
+            borderRadius: "6px",
+            fontSize: "14px",
+            fontWeight: "500",
+            cursor: "pointer",
+            transition: "all 0.2s ease"
+          }}
+        >
+          ← Previous
+        </button>
+        
+        <button
+          onClick={nextStep}
+          disabled={!isStep3Valid()}
+          style={{
+            background: isStep3Valid() ? "#007bff" : "#6c757d",
+            color: "#fff",
+            padding: "12px 24px",
+            border: "none",
+            borderRadius: "6px",
+            fontSize: "14px",
+            fontWeight: "600",
+            cursor: isStep3Valid() ? "pointer" : "not-allowed",
+            transition: "background-color 0.2s ease",
+            opacity: isStep3Valid() ? 1 : 0.6
+          }}
+        >
+          Next → Test
+        </button>
+      </div>
+    </div>
+  )
+
+  // Step 4: Test Workflow
+  const Step4Test = () => (
+    <div style={{
+      backgroundColor: "#fff",
+      borderRadius: "8px",
+      border: "1px solid #dee2e6",
+      padding: "32px",
+      maxWidth: "600px",
+      margin: "0 auto"
+    }}>
+      <h2 style={{
+        fontSize: "24px",
+        fontWeight: "600",
+        margin: "0 0 8px 0",
+        color: "#333"
+      }}>
+        Step 4: Test Workflow
+      </h2>
+      <p style={{
+        color: "#666",
+        fontSize: "16px",
+        margin: "0 0 32px 0"
+      }}>
+        Test that the agent can successfully replicate your recorded workflow.
+      </p>
+
+      {!testResult ? (
+        <div style={{
+          padding: "24px",
+          backgroundColor: "#f8f9fa",
+          borderRadius: "8px",
+          border: "1px solid #e9ecef",
+          textAlign: "center"
+        }}>
+          <button
+            onClick={handleTestWorkflow}
+            disabled={isTesting}
+            style={{
+              background: isTesting ? "#6c757d" : "#28a745",
+              color: "#fff",
+              padding: "12px 24px",
+              border: "none",
+              borderRadius: "6px",
+              fontSize: "16px",
+              fontWeight: "600",
+              cursor: isTesting ? "not-allowed" : "pointer",
+              transition: "background-color 0.2s ease",
+              opacity: isTesting ? 0.6 : 1
+            }}
+          >
+            {isTesting ? "Testing..." : "Test Workflow"}
+          </button>
+        </div>
+      ) : (
+        <div style={{
+          padding: "20px",
+          backgroundColor: testResult.success ? "#d4edda" : "#f8d7da",
+          borderRadius: "8px",
+          border: `1px solid ${testResult.success ? "#c3e6cb" : "#f5c6cb"}`,
+          marginBottom: "24px"
+        }}>
+          <h4 style={{
+            fontSize: "16px",
+            fontWeight: "600",
+            margin: "0 0 12px 0",
+            color: testResult.success ? "#155724" : "#721c24"
+          }}>
+            {testResult.success ? "✅ Test Passed" : "❌ Test Failed"}
+          </h4>
+          <div style={{
+            fontSize: "14px",
+            lineHeight: "1.6",
+            color: testResult.success ? "#155724" : "#721c24"
+          }}>
+            {testResult.success 
+              ? "The agent successfully replicated your workflow!"
+              : testResult.error || "The test failed. Please check the workflow."
+            }
+          </div>
+        </div>
+      )}
+
+      <div style={{ 
+        display: "flex", 
+        justifyContent: "space-between", 
+        alignItems: "center",
+        paddingTop: "24px",
+        borderTop: "1px solid #f1f3f4"
+      }}>
+        <button
+          onClick={prevStep}
+          style={{
+            background: "transparent",
+            color: "#6c757d",
+            padding: "12px 24px",
+            border: "1px solid #dee2e6",
+            borderRadius: "6px",
+            fontSize: "14px",
+            fontWeight: "500",
+            cursor: "pointer",
+            transition: "all 0.2s ease"
+          }}
+        >
+          ← Previous
+        </button>
+        
+        {isStep4Valid() && (
+          <button
+            onClick={() => router.push('/agents')}
+            style={{
+              background: "#28a745",
+              color: "#fff",
+              padding: "12px 24px",
+              border: "none",
+              borderRadius: "6px",
+              fontSize: "14px",
+              fontWeight: "600",
+              cursor: "pointer",
+              transition: "background-color 0.2s ease"
+            }}
+          >
+            Complete → Agents
+          </button>
+        )}
+      </div>
+    </div>
+  )
 
   // Step 2: Recording
   const Step2Recording = () => (
@@ -539,7 +883,7 @@ export default function CreateAgentPage() {
           margin: 0,
           lineHeight: "1.4"
         }}>
-          Click "Start Recording" to capture your screen and demonstrate the workflow you want to automate.
+          Click &quot;Start Recording&quot; to capture your screen and demonstrate the workflow you want to automate.
         </p>
       </div>
 
@@ -648,14 +992,16 @@ export default function CreateAgentPage() {
 
       {/* Step Content */}
       {currentStep === 1 && (
-        <Step1Name 
-          agentName={agentName}
-          onAgentNameChange={handleAgentNameChange}
+        <Step1Login 
+          selectedLoginId={selectedLoginId}
+          onLoginSelect={handleLoginSelect}
           isStep1Valid={isStep1Valid}
           onNextStep={nextStep}
         />
       )}
       {currentStep === 2 && <Step2Recording />}
+      {currentStep === 3 && <Step3Summary />}
+      {currentStep === 4 && <Step4Test />}
 
       {/* CSS for pulse animation */}
       <style jsx>{`

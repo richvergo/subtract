@@ -46,23 +46,23 @@ describe('/api/agents/record', () => {
       // Mock session
       mockGetServerSession.mockResolvedValue({
         user: mockUser,
-      } as any);
+      } as unknown);
 
       // Mock database operations
-      mockDb.user.findUnique.mockResolvedValue({ id: 'user-123' } as any);
+      mockDb.user.findUnique.mockResolvedValue({ id: 'user-123' } as unknown);
       mockDb.$transaction.mockImplementation(async (callback) => {
         return callback({
           agent: {
             create: jest.fn().mockResolvedValue(mockAgent),
           },
-        } as any);
+        } as unknown);
       });
-      mockDb.agent.findUnique.mockResolvedValue(mockAgent as any);
+      mockDb.agent.findUnique.mockResolvedValue(mockAgent as unknown);
 
       // Mock file system operations
-      const mockWriteFile = require('fs/promises').writeFile;
-      const mockMkdir = require('fs/promises').mkdir;
-      const mockExistsSync = require('fs').existsSync;
+      const mockWriteFile = jest.requireMock('fs/promises').writeFile;
+      const mockMkdir = jest.requireMock('fs/promises').mkdir;
+      const mockExistsSync = jest.requireMock('fs').existsSync;
       
       mockWriteFile.mockResolvedValue(undefined);
       mockMkdir.mockResolvedValue(undefined);
@@ -121,9 +121,9 @@ describe('/api/agents/record', () => {
     it('should return 400 when file is too large', async () => {
       mockGetServerSession.mockResolvedValue({
         user: mockUser,
-      } as any);
+      } as unknown);
 
-      mockDb.user.findUnique.mockResolvedValue({ id: 'user-123' } as any);
+      mockDb.user.findUnique.mockResolvedValue({ id: 'user-123' } as unknown);
 
       const formData = new FormData();
       formData.append('name', 'Test Agent');
@@ -151,9 +151,9 @@ describe('/api/agents/record', () => {
     it('should return 400 when file type is invalid', async () => {
       mockGetServerSession.mockResolvedValue({
         user: mockUser,
-      } as any);
+      } as unknown);
 
-      mockDb.user.findUnique.mockResolvedValue({ id: 'user-123' } as any);
+      mockDb.user.findUnique.mockResolvedValue({ id: 'user-123' } as unknown);
 
       const formData = new FormData();
       formData.append('name', 'Test Agent');
@@ -180,9 +180,9 @@ describe('/api/agents/record', () => {
     it('should return 400 when required fields are missing', async () => {
       mockGetServerSession.mockResolvedValue({
         user: mockUser,
-      } as any);
+      } as unknown);
 
-      mockDb.user.findUnique.mockResolvedValue({ id: 'user-123' } as any);
+      mockDb.user.findUnique.mockResolvedValue({ id: 'user-123' } as unknown);
 
       const formData = new FormData();
       // Missing name and purposePrompt
@@ -206,9 +206,9 @@ describe('/api/agents/record', () => {
     it('should return 400 when no file is uploaded', async () => {
       mockGetServerSession.mockResolvedValue({
         user: mockUser,
-      } as any);
+      } as unknown);
 
-      mockDb.user.findUnique.mockResolvedValue({ id: 'user-123' } as any);
+      mockDb.user.findUnique.mockResolvedValue({ id: 'user-123' } as unknown);
 
       const formData = new FormData();
       formData.append('name', 'Test Agent');
@@ -230,7 +230,7 @@ describe('/api/agents/record', () => {
     it('should return 404 when user is not found', async () => {
       mockGetServerSession.mockResolvedValue({
         user: mockUser,
-      } as any);
+      } as unknown);
 
       mockDb.user.findUnique.mockResolvedValue(null);
 

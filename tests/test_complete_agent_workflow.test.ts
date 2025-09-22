@@ -31,10 +31,12 @@ jest.mock('@/lib/db', () => ({
       findUnique: jest.fn(),
     },
     agentLogin: {
+      create: jest.fn(),
       createMany: jest.fn(),
     },
     agentRun: {
       create: jest.fn(),
+      update: jest.fn(),
     },
     $transaction: jest.fn(),
   },
@@ -80,9 +82,36 @@ describe('Complete Agent Workflow Pipeline', () => {
   };
 
   const mockRecordedSteps = [
-    { action: 'goto', url: 'https://example.com' },
-    { action: 'click', selector: '#login-btn' },
-    { action: 'type', selector: '#email', value: 'test@example.com' },
+    { 
+      action: 'goto', 
+      url: 'https://example.com',
+      metadata: {
+        timestamp: Date.now(),
+        intent: 'Navigate to the login page',
+        tag: 'a'
+      }
+    },
+    { 
+      action: 'click', 
+      selector: '#login-btn',
+      metadata: {
+        timestamp: Date.now(),
+        intent: 'Click the login button',
+        selector: '#login-btn',
+        tag: 'button'
+      }
+    },
+    { 
+      action: 'type', 
+      selector: '#email', 
+      value: 'test@example.com',
+      metadata: {
+        timestamp: Date.now(),
+        intent: 'Enter email address',
+        selector: '#email',
+        tag: 'input'
+      }
+    },
   ];
 
   const mockIntents = [
@@ -116,9 +145,19 @@ describe('Complete Agent Workflow Pipeline', () => {
     // Mock database calls
     (db.user.findUnique as jest.Mock).mockResolvedValue(mockUser);
     (db.login.findMany as jest.Mock).mockResolvedValue([mockLogin]);
-    (db.agent.create as jest.Mock).mockResolvedValue(mockAgent);
+    (db.agent.create as jest.Mock).mockImplementation(({ data }) => ({
+      ...mockAgent,
+      ...data,
+      agentConfig: JSON.stringify(mockRecordedSteps),
+    }));
     (db.agent.findFirst as jest.Mock).mockResolvedValue(mockAgent);
-    (db.agent.findUnique as jest.Mock).mockResolvedValue(mockAgent);
+    (db.agent.findUnique as jest.Mock).mockResolvedValue({
+      ...mockAgent,
+      agentConfig: JSON.stringify(mockRecordedSteps),
+      agentLogins: [{
+        login: mockLogin
+      }]
+    });
     (db.agent.update as jest.Mock).mockResolvedValue({
       ...mockAgent,
       agentIntents: JSON.stringify(mockIntents),
@@ -131,7 +170,10 @@ describe('Complete Agent Workflow Pipeline', () => {
     });
     (db.$transaction as jest.Mock).mockImplementation((callback) => callback({
       agent: { create: db.agent.create },
-      agentLogin: { createMany: db.agentLogin.createMany },
+      agentLogin: { 
+        create: db.agentLogin.create,
+        createMany: db.agentLogin.createMany 
+      },
       agentRun: { create: db.agentRun.create },
     }));
   });
@@ -162,18 +204,17 @@ describe('Complete Agent Workflow Pipeline', () => {
       const response = await recordWorkflow(request);
       const data = await response.json();
 
+      if (response.status !== 201) {
+        console.log('Error response:', data);
+      }
+
       expect(response.status).toBe(201);
       expect(data.agent).toBeDefined();
       expect(data.agent.agentConfig).toEqual(mockRecordedSteps);
       expect(data.agent.purposePrompt).toBe('Login to the application and create a new account');
-      expect(data.agent.agentIntents).toEqual(mockIntents);
+      expect(data.agent.agentIntents).toEqual([]); // Intents are generated separately via /annotate endpoint
       
-      // Verify LLM was called with correct parameters
-      expect(llmService.annotateWorkflow).toHaveBeenCalledWith(
-        mockRecordedSteps,
-        'Login to the application and create a new account',
-        'Test agent description'
-      );
+      // LLM annotation happens separately via /api/agents/[id]/annotate endpoint
 
       // Verify database was called with all three components
       expect(db.agent.create).toHaveBeenCalledWith({
@@ -206,8 +247,14 @@ describe('Complete Agent Workflow Pipeline', () => {
       const response = await recordWorkflow(request);
       const data = await response.json();
 
+      if (response.status !== 201) {
+        console.log('Error response:', data);
+      }
+
       expect(response.status).toBe(201);
       expect(data.agent.agentConfig).toEqual(mockRecordedSteps);
+      console.log('Expected purpose prompt:', 'Login to the application');
+      console.log('Actual purpose prompt:', data.agent.purposePrompt);
       expect(data.agent.purposePrompt).toBe('Login to the application');
       expect(data.agent.agentIntents).toEqual([]); // Should be empty array on failure
     });
@@ -287,7 +334,7 @@ describe('Complete Agent Workflow Pipeline', () => {
       expect(db.agent.update).toHaveBeenCalledWith({
         where: { id: 'agent-1' },
         data: {
-          agentConfig: expect.stringContaining('button[data-testid="login-button"]'),
+          agentConfig: expect.stringContaining('button[data-testid=\\"login-button\\"]'),
         },
       });
     });

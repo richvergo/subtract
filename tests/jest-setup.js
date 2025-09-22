@@ -3,7 +3,7 @@
  */
 
 // Mock Node.js path module for Prisma
-const path = require('path');
+import path from 'path';
 global.path = path;
 
 // Ensure proper Node.js environment

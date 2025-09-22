@@ -227,4 +227,4 @@ Do-Not-Do (MVP)
 
 ❌ Cross-user agent sharing
 
-✅ This version removes all the old checklist/month-close references and reframes everything around Agents, Logins, Runs — the real MVP you’re building.
+✅ This version is focused on Agents, Logins, and Runs — the core MVP functionality.

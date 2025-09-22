@@ -1,16 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import { authOptions } from '@/lib/auth-config';
 import { db } from '@/lib/db';
-import { updateLoginSchema, type UpdateLoginInput } from '@/lib/schemas/agents';
-import { encryptLoginCredentials, maskLoginCredentials } from '@/lib/encryption';
+import { updateLoginSchema } from '@/lib/schemas/agents';
+import { encryptLoginCredentials, maskLoginCredentials, encrypt } from '@/lib/encryption';
 
 /**
  * GET /api/logins/[id] - Get specific login (with masked credentials)
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await getServerSession(authOptions);
@@ -33,9 +33,11 @@ export async function GET(
       );
     }
 
+    const { id: loginId } = await params;
+    
     const login = await db.login.findFirst({
       where: {
-        id: params.id,
+        id: loginId,
         ownerId: user.id, // Ensure user owns this login
       },
     });
@@ -72,7 +74,7 @@ export async function GET(
  */
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await getServerSession(authOptions);
@@ -82,6 +84,8 @@ export async function PUT(
         { status: 401 }
       );
     }
+
+    const { id: loginId } = await params;
 
     const user = await db.user.findUnique({
       where: { email: session.user.email },
@@ -98,7 +102,7 @@ export async function PUT(
     // Check if login exists and user owns it
     const existingLogin = await db.login.findFirst({
       where: {
-        id: params.id,
+        id: loginId,
         ownerId: user.id,
       },
     });
@@ -114,7 +118,7 @@ export async function PUT(
     const validatedData = updateLoginSchema.parse(body);
 
     // Prepare update data
-    const updateData: any = {};
+    const updateData: Record<string, unknown> = {};
     
     if (validatedData.name !== undefined) {
       updateData.name = validatedData.name;
@@ -130,18 +134,18 @@ export async function PUT(
     
     if (validatedData.password !== undefined) {
       updateData.password = validatedData.password 
-        ? encryptLoginCredentials({ password: validatedData.password }).password
+        ? encrypt(validatedData.password)
         : null;
     }
     
     if (validatedData.oauthToken !== undefined) {
       updateData.oauthToken = validatedData.oauthToken
-        ? encryptLoginCredentials({ oauthToken: validatedData.oauthToken }).oauthToken
+        ? encrypt(validatedData.oauthToken)
         : null;
     }
 
     const updatedLogin = await db.login.update({
-      where: { id: params.id },
+      where: { id: loginId },
       data: updateData,
     });
 
@@ -178,7 +182,7 @@ export async function PUT(
  */
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await getServerSession(authOptions);
@@ -188,6 +192,8 @@ export async function DELETE(
         { status: 401 }
       );
     }
+
+    const { id: loginId } = await params;
 
     const user = await db.user.findUnique({
       where: { email: session.user.email },
@@ -204,7 +210,7 @@ export async function DELETE(
     // Check if login exists and user owns it
     const existingLogin = await db.login.findFirst({
       where: {
-        id: params.id,
+        id: loginId,
         ownerId: user.id,
       },
     });
@@ -218,7 +224,7 @@ export async function DELETE(
 
     // Check if login is being used by any agents
     const agentCount = await db.agentLogin.count({
-      where: { loginId: params.id },
+      where: { loginId: loginId },
     });
 
     if (agentCount > 0) {
@@ -229,7 +235,7 @@ export async function DELETE(
     }
 
     await db.login.delete({
-      where: { id: params.id },
+      where: { id: loginId },
     });
 
     return NextResponse.json({ message: 'Login deleted successfully' });

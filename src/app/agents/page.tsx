@@ -49,7 +49,7 @@ interface Agent {
     stepIndex: number
     intent: string
   }>
-  recordingPath?: string
+  // recordingPath removed - using screen recording approach instead
   recordingUrl?: string
   audioUrl?: string
   llmSummary?: string

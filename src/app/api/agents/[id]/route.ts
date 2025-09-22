@@ -5,9 +5,9 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import { authOptions } from '@/lib/auth-config';
 import { db } from '@/lib/db';
-import { updateAgentSchema, type UpdateAgentInput } from '@/lib/schemas/agents';
+import { updateAgentSchema } from '@/lib/schemas/agents';
 
 /**
  * GET /api/agents/[id] - Fetch agent details + latest runs
@@ -82,7 +82,7 @@ export async function GET(
       processingProgress: agent.processingProgress,
       agentConfig: agent.agentConfig ? JSON.parse(agent.agentConfig) : null,
       agentIntents: agent.agentIntents ? JSON.parse(agent.agentIntents) : null,
-      recordingPath: agent.recordingPath,
+      // recordingPath removed - using screen recording approach instead
       recordingUrl: agent.recordingUrl,
       ownerId: agent.ownerId,
       createdAt: agent.createdAt,
@@ -174,17 +174,17 @@ export async function PUT(
 
     // Update agent and login associations in a transaction
     const result = await db.$transaction(async (tx) => {
-      // Prepare update data (exclude loginIds and handle agentConfig)
-      const { loginIds, agentConfig, ...updateData } = validatedData;
+      // Prepare update data (exclude loginIds and handle agentConfig/agentIntents)
+      const { loginIds, agentConfig, agentIntents, ...updateData } = validatedData;
       
-      // Convert agentConfig to agentConfig if provided
+      // Convert agentConfig to string if provided
       if (agentConfig) {
-        updateData.agentConfig = JSON.stringify(agentConfig);
+        (updateData as Record<string, unknown>).agentConfig = JSON.stringify(agentConfig);
       }
       
-      // Convert agentIntents to agentIntents if provided
-      if (validatedData.agentIntents) {
-        updateData.agentIntents = JSON.stringify(validatedData.agentIntents);
+      // Convert agentIntents to string if provided
+      if (agentIntents) {
+        (updateData as Record<string, unknown>).agentIntents = JSON.stringify(agentIntents);
       }
       
       // Handle purposePrompt if provided
@@ -260,7 +260,7 @@ export async function PUT(
       processingProgress: agent.processingProgress,
       agentConfig: agent.agentConfig ? JSON.parse(agent.agentConfig) : null,
       agentIntents: agent.agentIntents ? JSON.parse(agent.agentIntents) : null,
-      recordingPath: agent.recordingPath,
+      // recordingPath removed - using screen recording approach instead
       recordingUrl: agent.recordingUrl,
       ownerId: agent.ownerId,
       createdAt: agent.createdAt,

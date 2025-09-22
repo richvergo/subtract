@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import { authOptions } from '@/lib/auth-config';
 import { db } from '@/lib/db';
 import { llmService } from '@/lib/llm-service';
-import { repairSelectorSchema, type RepairSelectorInput } from '@/lib/schemas/agents';
+import { repairSelectorSchema } from '@/lib/schemas/agents';
 
 /**
  * POST /api/agents/[id]/repair - Repair a failed selector using LLM
@@ -52,10 +52,13 @@ export async function POST(
     }
 
     const body = await request.json();
-    const validatedData = repairSelectorSchema.parse(body);
+    const validatedData = repairSelectorSchema.parse({
+      ...body,
+      agentId, // Add agentId from URL params
+    });
 
     // Parse agent config and intents
-    const agentConfig = JSON.parse(agent.agentConfig);
+    const agentConfig = JSON.parse(agent.agentConfig || '[]');
     const agentIntents = agent.agentIntents ? JSON.parse(agent.agentIntents) : [];
 
     // Get the step that failed
@@ -68,7 +71,7 @@ export async function POST(
     }
 
     // Get the intent for this step
-    const stepIntent = agentIntents.find((intent: any) => intent.stepIndex === validatedData.stepIndex);
+    const stepIntent = agentIntents.find((intent: { stepIndex: number }) => intent.stepIndex === validatedData.stepIndex);
     if (!stepIntent) {
       return NextResponse.json(
         { error: 'No intent found for this step' },

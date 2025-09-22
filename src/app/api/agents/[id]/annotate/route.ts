@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import { authOptions } from '@/lib/auth-config';
 import { db } from '@/lib/db';
 import { llmService } from '@/lib/llm-service';
-import { annotateWorkflowSchema, type AnnotateWorkflowInput } from '@/lib/schemas/agents';
+import { annotateWorkflowSchema } from '@/lib/schemas/agents';
 
 /**
  * POST /api/agents/[id]/annotate - Annotate an existing agent workflow
@@ -52,7 +52,10 @@ export async function POST(
     }
 
     const body = await request.json();
-    const validatedData = annotateWorkflowSchema.parse(body);
+    const validatedData = annotateWorkflowSchema.parse({
+      ...body,
+      agentId, // Add agentId from URL params
+    });
 
     // Generate LLM annotations for the workflow steps
     let agentIntents;
@@ -60,7 +63,7 @@ export async function POST(
       agentIntents = await llmService.annotateWorkflow(
         validatedData.recordedSteps,
         validatedData.purposePrompt,
-        agent.description
+        agent.description || undefined
       );
     } catch (error) {
       console.error('LLM annotation failed:', error);

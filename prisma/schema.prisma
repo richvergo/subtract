@@ -14,9 +14,9 @@ model User {
   name         String?
   createdAt    DateTime         @default(now())
   agents       Agent[]
-  recordings   AgentRecording[]
   logins       Login[]
   memberships  Membership[]
+  tasks        Task[]
 }
 
 model Entity {
@@ -57,6 +57,7 @@ model Login {
   templateId    String?
   sessionData   String?
   sessionExpiry DateTime?
+  recordingUrl  String?
   agentLogins   AgentLogin[]
   owner         User         @relation(fields: [ownerId], references: [id], onDelete: Cascade)
 }
@@ -71,7 +72,7 @@ model Agent {
   status             AgentStatus  @default(DRAFT)
   processingStatus   String       @default("processing")
   processingProgress Int?
-  recordingPath      String?
+  // recordingPath removed - using screen recording approach instead
   ownerId            String
   createdAt          DateTime     @default(now())
   updatedAt          DateTime     @updatedAt
@@ -85,6 +86,7 @@ model Agent {
   agentLogins        AgentLogin[]
   agentRuns          AgentRun[]
   events             Event[]
+  tasks              Task[]
 }
 
 model AgentLogin {
@@ -119,15 +121,30 @@ model AgentRun {
   @@index([agentId, startedAt])
 }
 
-model AgentRecording {
-  id           String   @id @default(cuid())
-  storage_path String
-  mime_type    String?
-  size         BigInt?
-  created_by   String
-  created_at   DateTime @default(now())
-  createdBy    User     @relation(fields: [created_by], references: [id], onDelete: Cascade)
+model Task {
+  id          String     @id @default(cuid())
+  name        String
+  description String?
+  agentId     String
+  userId      String
+  parameters  String?
+  schedule    String?
+  priority    String     @default("normal")
+  status      TaskStatus @default(PENDING)
+  createdAt   DateTime   @default(now())
+  startedAt   DateTime?
+  finishedAt  DateTime?
+  result      String?
+  error       String?
+  logs        String?
+  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  agent       Agent      @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([agentId, status])
 }
+
+// AgentRecording model removed - using screen recording approach instead
 
 model Event {
   id            String   @id @default(cuid())
@@ -178,4 +195,12 @@ enum RunStatus {
   REQUIRES_CONFIRMATION
   CONFIRMED
   REJECTED
+}
+
+enum TaskStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+  CANCELLED
 }

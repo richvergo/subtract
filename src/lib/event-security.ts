@@ -1,6 +1,6 @@
-import { NextRequest } from 'next/server';
+// import { NextRequest } from 'next/server';
 import { getServerSession } from 'next-auth';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import { authOptions } from '@/lib/auth-config';
 import { db } from '@/lib/db';
 
 /**
@@ -10,7 +10,7 @@ export class EventSecurity {
   /**
    * Validates that the user is authenticated and owns the agent
    */
-  static async validateAgentOwnership(agentId: string, request: NextRequest): Promise<{
+  static async validateAgentOwnership(agentId: string): Promise<{
     authorized: boolean;
     user?: { id: string; email: string };
     error?: string;
@@ -69,7 +69,7 @@ export class EventSecurity {
   /**
    * Validates that the user is authenticated for general event operations
    */
-  static async validateUserAuthentication(request: NextRequest): Promise<{
+  static async validateUserAuthentication(): Promise<{
     authorized: boolean;
     user?: { id: string; email: string };
     error?: string;
@@ -112,29 +112,30 @@ export class EventSecurity {
   /**
    * Sanitizes event data to remove sensitive information
    */
-  static sanitizeEventData(eventData: any): any {
-    const sanitized = { ...eventData };
+  static sanitizeEventData(eventData: unknown): unknown {
+    const sanitized = eventData && typeof eventData === 'object' ? { ...eventData } : {};
 
     // Remove password-related values
-    if (sanitized.value && (
-      sanitized.target?.toLowerCase().includes('password') ||
-      sanitized.elementType?.toLowerCase().includes('password') ||
-      sanitized.target?.toLowerCase().includes('pass') ||
-      sanitized.value.includes('***') // Common password masking
+    const sanitizedObj = sanitized as Record<string, unknown>;
+    if (sanitizedObj.value && (
+      (sanitizedObj.target as string)?.toLowerCase().includes('password') ||
+      (sanitizedObj.elementType as string)?.toLowerCase().includes('password') ||
+      (sanitizedObj.target as string)?.toLowerCase().includes('pass') ||
+      (sanitizedObj.value as string).includes('***') // Common password masking
     )) {
-      sanitized.value = '[REDACTED]';
+      sanitizedObj.value = '[REDACTED]';
     }
 
     // Remove sensitive URLs (login pages, etc.)
-    if (sanitized.url && (
-      sanitized.url.includes('/login') ||
-      sanitized.url.includes('/signin') ||
-      sanitized.url.includes('/auth')
+    if (sanitizedObj.url && (
+      (sanitizedObj.url as string).includes('/login') ||
+      (sanitizedObj.url as string).includes('/signin') ||
+      (sanitizedObj.url as string).includes('/auth')
     )) {
-      sanitized.url = sanitized.url.replace(/\/[^\/]*$/, '/[REDACTED]');
+      sanitizedObj.url = (sanitizedObj.url as string).replace(/\/[^\/]*$/, '/[REDACTED]');
     }
 
-    return sanitized;
+    return sanitizedObj;
   }
 
   /**

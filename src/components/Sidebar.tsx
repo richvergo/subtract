@@ -14,8 +14,8 @@ export function Sidebar() {
 
   const navigation = [
     {
-      name: 'Dashboard',
-      href: '/',
+      name: 'Tasks',
+      href: '/tasks',
     },
     {
       name: 'Agents',
@@ -24,10 +24,6 @@ export function Sidebar() {
     {
       name: 'Logins',
       href: '/logins',
-    },
-    {
-      name: 'Tasks',
-      href: '/tasks',
     },
   ]
 
@@ -46,7 +42,7 @@ export function Sidebar() {
       <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
         {/* Logo Section */}
         <div style={{ padding: "24px", borderBottom: "1px solid #444" }}>
-          <Link href="/" style={{ 
+          <Link href="/tasks" style={{ 
             display: "flex", 
             alignItems: "center", 
             gap: "12px",
@@ -110,10 +106,9 @@ export function Sidebar() {
                 }}
               >
                 <span style={{ fontSize: "16px" }}>
-                  {item.name === 'Dashboard' ? '📊' : 
+                  {item.name === 'Tasks' ? '📋' : 
                    item.name === 'Agents' ? '🤖' : 
-                   item.name === 'Logins' ? '🔑' : 
-                   item.name === 'Tasks' ? '📋' : '•'}
+                   item.name === 'Logins' ? '🔑' : '•'}
                 </span>
                 <span>{item.name}</span>
               </Link>

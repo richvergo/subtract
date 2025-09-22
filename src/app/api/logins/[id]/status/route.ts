@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import { authOptions } from '@/lib/auth-config';
 import { db } from '@/lib/db';
 import { SessionManager } from '@/lib/session-manager';
 
@@ -9,7 +9,7 @@ import { SessionManager } from '@/lib/session-manager';
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await getServerSession(authOptions);
@@ -32,7 +32,7 @@ export async function GET(
       );
     }
 
-    const loginId = params.id;
+    const { id: loginId } = await params;
     const login = await db.login.findFirst({
       where: { 
         id: loginId,

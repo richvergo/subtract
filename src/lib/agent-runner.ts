@@ -5,14 +5,14 @@
 
 import { db } from './db';
 import { SessionManager } from './session-manager';
-import puppeteer from 'puppeteer';
+import puppeteer, { Browser, Page } from 'puppeteer';
 
 export interface AgentRunResult {
   success: boolean;
   errorMessage?: string;
   outputPath?: string;
   screenshotPath?: string;
-  logs: Record<string, any>;
+  logs: Record<string, unknown>;
 }
 
 export interface LoginValidationResult {
@@ -24,7 +24,7 @@ export interface LoginValidationResult {
 }
 
 export class AgentRunner {
-  private browser: any = null;
+  private browser: Browser | null = null;
 
   /**
    * Validate all logins required for an agent before execution
@@ -121,8 +121,11 @@ export class AgentRunner {
   /**
    * Validate a specific login's session
    */
-  private async validateLoginSession(login: any): Promise<{ isValid: boolean; needsReconnect: boolean; errorMessage?: string }> {
-    let page = null;
+  private async validateLoginSession(login: {
+    sessionData: string | null;
+    loginUrl: string;
+  }): Promise<{ isValid: boolean; needsReconnect: boolean; errorMessage?: string }> {
+    let page: Page | null = null;
 
     try {
       if (!this.browser) {
@@ -144,6 +147,14 @@ export class AgentRunner {
       await page.setViewport({ width: 1280, height: 720 });
 
       // Apply stored session data
+      if (!login.sessionData) {
+        return {
+          isValid: false,
+          needsReconnect: true,
+          errorMessage: 'No session data available'
+        };
+      }
+      
       const sessionData = SessionManager.decryptSessionData(login.sessionData);
       await SessionManager.applySessionToPage(page, sessionData);
 
@@ -260,8 +271,8 @@ export class AgentRunner {
           loginId: login.id,
           loginName: login.name,
           status: isExpired && login.status === 'ACTIVE' ? 'DISCONNECTED' : login.status,
-          needsReconnect: login.status === 'NEEDS_RECONNECT' || login.status === 'DISCONNECTED' || (isExpired && login.status === 'ACTIVE'),
-          errorMessage: login.errorMessage
+          needsReconnect: Boolean(login.status === 'NEEDS_RECONNECT' || login.status === 'DISCONNECTED' || (isExpired && login.status === 'ACTIVE')),
+          errorMessage: login.errorMessage || undefined
         };
       });
 

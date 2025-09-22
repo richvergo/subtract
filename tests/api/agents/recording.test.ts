@@ -40,15 +40,15 @@ describe('/api/agents/[id]/recording', () => {
       // Mock session
       mockGetServerSession.mockResolvedValue({
         user: mockUser,
-      } as any);
+      } as unknown);
 
       // Mock database operations
-      mockDb.user.findUnique.mockResolvedValue({ id: 'user-123' } as any);
-      mockDb.agent.findFirst.mockResolvedValue(mockAgent as any);
+      mockDb.user.findUnique.mockResolvedValue({ id: 'user-123' } as unknown);
+      mockDb.agent.findFirst.mockResolvedValue(mockAgent as unknown);
 
       // Mock file system operations
-      const mockReadFile = require('fs/promises').readFile;
-      const mockExistsSync = require('fs').existsSync;
+      const mockReadFile = jest.requireMock('fs/promises').readFile;
+      const mockExistsSync = jest.requireMock('fs').existsSync;
       
       const mockFileBuffer = Buffer.from('fake video content');
       mockReadFile.mockResolvedValue(mockFileBuffer);
@@ -82,7 +82,7 @@ describe('/api/agents/[id]/recording', () => {
     it('should return 404 when user is not found', async () => {
       mockGetServerSession.mockResolvedValue({
         user: mockUser,
-      } as any);
+      } as unknown);
 
       mockDb.user.findUnique.mockResolvedValue(null);
 
@@ -99,9 +99,9 @@ describe('/api/agents/[id]/recording', () => {
     it('should return 404 when agent is not found', async () => {
       mockGetServerSession.mockResolvedValue({
         user: mockUser,
-      } as any);
+      } as unknown);
 
-      mockDb.user.findUnique.mockResolvedValue({ id: 'user-123' } as any);
+      mockDb.user.findUnique.mockResolvedValue({ id: 'user-123' } as unknown);
       mockDb.agent.findFirst.mockResolvedValue(null);
 
       const request = new NextRequest('http://localhost:3000/api/agents/agent-123/recording');
@@ -117,13 +117,13 @@ describe('/api/agents/[id]/recording', () => {
     it('should return 404 when agent has no recording', async () => {
       mockGetServerSession.mockResolvedValue({
         user: mockUser,
-      } as any);
+      } as unknown);
 
-      mockDb.user.findUnique.mockResolvedValue({ id: 'user-123' } as any);
+      mockDb.user.findUnique.mockResolvedValue({ id: 'user-123' } as unknown);
       mockDb.agent.findFirst.mockResolvedValue({
         ...mockAgent,
         recordingUrl: null,
-      } as any);
+      } as unknown);
 
       const request = new NextRequest('http://localhost:3000/api/agents/agent-123/recording');
       const params = { id: 'agent-123' };
@@ -138,13 +138,13 @@ describe('/api/agents/[id]/recording', () => {
     it('should return 404 when recording file does not exist', async () => {
       mockGetServerSession.mockResolvedValue({
         user: mockUser,
-      } as any);
+      } as unknown);
 
-      mockDb.user.findUnique.mockResolvedValue({ id: 'user-123' } as any);
-      mockDb.agent.findFirst.mockResolvedValue(mockAgent as any);
+      mockDb.user.findUnique.mockResolvedValue({ id: 'user-123' } as unknown);
+      mockDb.agent.findFirst.mockResolvedValue(mockAgent as unknown);
 
       // Mock file system operations
-      const mockExistsSync = require('fs').existsSync;
+      const mockExistsSync = jest.requireMock('fs').existsSync;
       mockExistsSync.mockReturnValue(false); // File doesn't exist
 
       const request = new NextRequest('http://localhost:3000/api/agents/agent-123/recording');
@@ -161,18 +161,18 @@ describe('/api/agents/[id]/recording', () => {
       // Mock session
       mockGetServerSession.mockResolvedValue({
         user: mockUser,
-      } as any);
+      } as unknown);
 
       // Mock database operations
-      mockDb.user.findUnique.mockResolvedValue({ id: 'user-123' } as any);
+      mockDb.user.findUnique.mockResolvedValue({ id: 'user-123' } as unknown);
       mockDb.agent.findFirst.mockResolvedValue({
         ...mockAgent,
         recordingUrl: '/uploads/agents/agent_1234567890.mp4',
-      } as any);
+      } as unknown);
 
       // Mock file system operations
-      const mockReadFile = require('fs/promises').readFile;
-      const mockExistsSync = require('fs').existsSync;
+      const mockReadFile = jest.requireMock('fs/promises').readFile;
+      const mockExistsSync = jest.requireMock('fs').existsSync;
       
       const mockFileBuffer = Buffer.from('fake video content');
       mockReadFile.mockResolvedValue(mockFileBuffer);
@@ -192,15 +192,15 @@ describe('/api/agents/[id]/recording', () => {
       // Mock session
       mockGetServerSession.mockResolvedValue({
         user: mockUser,
-      } as any);
+      } as unknown);
 
       // Mock database operations
-      mockDb.user.findUnique.mockResolvedValue({ id: 'user-123' } as any);
-      mockDb.agent.findFirst.mockResolvedValue(mockAgent as any);
+      mockDb.user.findUnique.mockResolvedValue({ id: 'user-123' } as unknown);
+      mockDb.agent.findFirst.mockResolvedValue(mockAgent as unknown);
 
       // Mock file system operations
-      const mockReadFile = require('fs/promises').readFile;
-      const mockExistsSync = require('fs').existsSync;
+      const mockReadFile = jest.requireMock('fs/promises').readFile;
+      const mockExistsSync = jest.requireMock('fs').existsSync;
       
       mockReadFile.mockRejectedValue(new Error('File read error'));
       mockExistsSync.mockReturnValue(true);

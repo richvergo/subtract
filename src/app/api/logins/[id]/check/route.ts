@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import { authOptions } from '@/lib/auth-config';
 import { db } from '@/lib/db';
 import { SessionManager } from '@/lib/session-manager';
 import puppeteer from 'puppeteer';
@@ -10,8 +10,10 @@ import puppeteer from 'puppeteer';
  */
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id: loginId } = await params;
+  
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user?.email) {
@@ -32,8 +34,6 @@ export async function POST(
         { status: 404 }
       );
     }
-
-    const loginId = params.id;
     const login = await db.login.findFirst({
       where: { 
         id: loginId,
@@ -146,7 +146,7 @@ export async function POST(
     // Update login with error status
     try {
       await db.login.update({
-        where: { id: params.id },
+        where: { id: loginId },
         data: {
           status: 'DISCONNECTED',
           lastCheckedAt: new Date(),

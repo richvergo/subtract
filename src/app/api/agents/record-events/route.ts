@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import { authOptions } from '@/lib/auth-config';
 import { db } from '@/lib/db';
-import { recordWorkflowWithEventsSchema, type RecordWorkflowWithEventsInput } from '@/lib/schemas/agents';
+import { recordWorkflowWithEventsSchema } from '@/lib/schemas/agents';
 import { getUserEmailForQuery } from '@/lib/auth';
 import { processInlineScreenshots } from '@/lib/screenshot-storage';
 
@@ -55,7 +55,7 @@ export async function POST(request: NextRequest) {
 
       try {
         // Process screenshots in the event log
-        processedEventLog = await processInlineScreenshots(tempAgent.id, processedEventLog);
+        processedEventLog = await processInlineScreenshots(tempAgent.id, processedEventLog as unknown[]) as typeof processedEventLog;
       } catch (error) {
         console.error('Failed to process screenshots:', error);
         // Continue without screenshots rather than failing
@@ -79,7 +79,7 @@ export async function POST(request: NextRequest) {
       });
 
       // Update agent with processed event log and transcript
-      const updatedAgent = await db.agent.update({
+      await db.agent.update({
         where: { id: tempAgent.id },
         data: {
           eventLog: JSON.stringify(processedEventLog),
@@ -189,17 +189,17 @@ export async function POST(request: NextRequest) {
       }, { status: 201 });
     }
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('[agents/record-events] Error', {
-      message: error?.message,
-      stack: error?.stack,
-      name: error?.name,
-      cause: error?.cause,
+      message: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined,
+      name: error instanceof Error ? error.name : undefined,
+      cause: error instanceof Error ? error.cause : undefined,
     });
 
-    if (error.name === 'ZodError') {
+    if (error instanceof Error && error.name === 'ZodError') {
       return NextResponse.json(
-        { error: 'Validation error', details: error.errors },
+        { error: 'Validation error', details: (error as unknown as { errors: unknown }).errors },
         { status: 400 }
       );
     }

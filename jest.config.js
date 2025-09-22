@@ -45,7 +45,7 @@ module.exports = {
       transformIgnorePatterns: [
         'node_modules/(?!(clsx)/)',
       ],
-      setupFilesAfterEnv: ['<rootDir>/jest.setup.ts'],
+      setupFilesAfterEnv: ['<rootDir>/tests/setup.ts'],
     },
   ],
   moduleNameMapper: {
@@ -57,10 +57,9 @@ module.exports = {
     '!src/**/*.d.ts',
     '!src/app/api/auth/**', // Exclude auth routes from coverage
   ],
-  setupFilesAfterEnv: ['<rootDir>/jest.setup.ts', '<rootDir>/tests/setup.ts'],
+  setupFilesAfterEnv: ['<rootDir>/tests/setup.ts'],
   setupFiles: ['<rootDir>/tests/jest-setup.js'],
   testTimeout: 30000, // 30 seconds for integration tests
   maxWorkers: 1, // Run tests sequentially to avoid DB conflicts
-  globalSetup: '<rootDir>/tests/global-setup.ts',
-  globalTeardown: '<rootDir>/tests/global-teardown.ts',
+  // Global setup/teardown moved to tests/setup.ts
 };

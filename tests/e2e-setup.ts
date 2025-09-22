@@ -47,14 +47,14 @@ export async function setupE2ETests() {
       env: { ...process.env, DATABASE_URL: E2E_CONFIG.DATABASE_URL },
       stdio: 'pipe',
     });
-  } catch (error) {
+  } catch {
     console.warn('E2E Migration failed, continuing with existing schema');
   }
 
   // Create test artifacts directory
   try {
     await fs.mkdir(E2E_CONFIG.TEST_ARTIFACTS_DIR, { recursive: true });
-  } catch (error) {
+  } catch {
     // Directory might already exist
   }
 
@@ -70,7 +70,7 @@ export async function cleanupE2ETests() {
   // Clean up test artifacts
   try {
     await fs.rm(E2E_CONFIG.TEST_ARTIFACTS_DIR, { recursive: true, force: true });
-  } catch (error) {
+  } catch {
     // Ignore cleanup errors
   }
 
@@ -116,7 +116,7 @@ export async function createE2ETestLogin(ownerId: string, name: string) {
 }
 
 // Helper function to create test agent for E2E tests
-export async function createE2ETestAgent(ownerId: string, name: string, agentConfig: any[] = []) {
+export async function createE2ETestAgent(ownerId: string, name: string, agentConfig: unknown[] = []) {
   return await e2eTestDb.agent.create({
     data: {
       name,
@@ -129,7 +129,7 @@ export async function createE2ETestAgent(ownerId: string, name: string, agentCon
 }
 
 // Helper function to wait for agent run completion
-export async function waitForAgentRunCompletion(runId: string, timeoutMs: number = 30000): Promise<any> {
+export async function waitForAgentRunCompletion(runId: string, timeoutMs: number = 30000): Promise<unknown> {
   const startTime = Date.now();
   
   while (Date.now() - startTime < timeoutMs) {
@@ -149,7 +149,7 @@ export async function waitForAgentRunCompletion(runId: string, timeoutMs: number
 }
 
 // Helper function to save test artifacts
-export async function saveTestArtifacts(testName: string, data: any) {
+export async function saveTestArtifacts(testName: string, data: unknown) {
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
   const artifactPath = path.join(E2E_CONFIG.TEST_ARTIFACTS_DIR, `${testName}-${timestamp}.json`);
   

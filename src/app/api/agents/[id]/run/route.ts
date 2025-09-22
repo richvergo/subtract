@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import { authOptions } from '@/lib/auth-config';
 import { db } from '@/lib/db';
 import { RunStatus } from '@prisma/client';
 import { enqueueAgentRun } from '@/lib/queue';
@@ -73,11 +73,7 @@ export async function POST(
 
     // Enqueue the job to Redis queue
     try {
-      const job = await enqueueAgentRun({
-        runId: agentRun.id,
-        agentId: agent.id,
-        ownerId: user.id,
-      });
+      const job = await enqueueAgentRun(agent.id);
 
       console.log(`[API] Enqueued agent run: ${agentRun.id} for agent: ${agent.id}`);
 
@@ -96,10 +92,10 @@ export async function POST(
         data: {
           status: RunStatus.FAILED,
           finishedAt: new Date(),
-          logs: {
+          logs: JSON.stringify({
             error: 'Failed to enqueue job',
             timestamp: new Date().toISOString(),
-          },
+          }),
         },
       });
 

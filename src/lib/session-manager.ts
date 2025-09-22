@@ -67,11 +67,19 @@ export class SessionManager {
   }
 
   /**
+   * Capture session data from Puppeteer page (alias for extractSessionFromPage)
+   */
+  static async captureSessionData(page: unknown): Promise<SessionData> {
+    return this.extractSessionFromPage(page);
+  }
+
+  /**
    * Extract session data from Puppeteer page
    */
-  static async extractSessionFromPage(page: any): Promise<SessionData> {
+  static async extractSessionFromPage(page: unknown): Promise<SessionData> {
     try {
-      const sessionData = await page.evaluate(() => {
+      const pageObj = page as { evaluate: (fn: () => unknown) => Promise<unknown> };
+      const sessionData = await pageObj.evaluate(() => {
         // Extract cookies
         const cookies = document.cookie.split(';').map(cookie => {
           const [name, value] = cookie.trim().split('=');
@@ -105,10 +113,11 @@ export class SessionManager {
       });
 
       // Get user agent from page
-      const userAgent = await page.evaluate(() => navigator.userAgent);
+      const pageForUserAgent = page as { evaluate: (fn: () => string) => Promise<string> };
+      const userAgent = await pageForUserAgent.evaluate(() => navigator.userAgent);
 
       return {
-        ...sessionData,
+        ...(sessionData as SessionData),
         userAgent
       };
     } catch (error) {
@@ -120,22 +129,27 @@ export class SessionManager {
   /**
    * Apply session data to Puppeteer page
    */
-  static async applySessionToPage(page: any, sessionData: SessionData): Promise<void> {
+  static async applySessionToPage(page: unknown, sessionData: SessionData): Promise<void> {
     try {
+      const pageObj = page as {
+        setUserAgent: (userAgent: string) => Promise<void>;
+        setCookie: (...cookies: Array<{ name: string; value: string; domain?: string; path?: string }>) => Promise<void>;
+        evaluate: (fn: (localStorage?: Record<string, string>) => void, data?: Record<string, string>) => Promise<void>;
+      };
       // Set user agent
       if (sessionData.userAgent) {
-        await page.setUserAgent(sessionData.userAgent);
+        await pageObj.setUserAgent(sessionData.userAgent);
       }
 
       // Set cookies
       if (sessionData.cookies && sessionData.cookies.length > 0) {
-        await page.setCookie(...sessionData.cookies);
+        await pageObj.setCookie(...sessionData.cookies);
       }
 
       // Set localStorage
       if (sessionData.localStorage) {
-        await page.evaluate((localStorage) => {
-          for (const [key, value] of Object.entries(localStorage)) {
+        await pageObj.evaluate((localStorage) => {
+          for (const [key, value] of Object.entries(localStorage || {})) {
             window.localStorage.setItem(key, value);
           }
         }, sessionData.localStorage);
@@ -143,8 +157,8 @@ export class SessionManager {
 
       // Set sessionStorage
       if (sessionData.sessionStorage) {
-        await page.evaluate((sessionStorage) => {
-          for (const [key, value] of Object.entries(sessionStorage)) {
+        await pageObj.evaluate((sessionStorage) => {
+          for (const [key, value] of Object.entries(sessionStorage || {})) {
             window.sessionStorage.setItem(key, value);
           }
         }, sessionData.sessionStorage);
@@ -158,24 +172,36 @@ export class SessionManager {
   /**
    * Validate if session is still active by making a lightweight request
    */
-  static async validateSession(page: any, loginUrl: string): Promise<SessionValidationResult> {
+  static async validateSession(page: unknown, loginUrl: string): Promise<SessionValidationResult> {
     try {
+      const pageObj = page as {
+        goto: (url: string, options?: { waitUntil?: string; timeout?: number }) => Promise<void>;
+        url: () => string;
+        waitForTimeout: (ms: number) => Promise<void>;
+        $: (selector: string) => Promise<unknown>;
+      };
       // Navigate to the login URL
-      await page.goto(loginUrl, { waitUntil: 'networkidle2', timeout: 10000 });
+      await pageObj.goto(loginUrl, { waitUntil: 'networkidle2', timeout: 30000 });
       
-      const currentUrl = page.url();
-      const pageTitle = await page.title();
+      const currentUrl = pageObj.url();
+      // const pageTitle = await pageObj.title();
 
-      // Check if we're still on a login page (indicating session expired)
-      const isOnLoginPage = currentUrl.includes('login') || 
+      // Wait a bit for any redirects to complete
+      await pageObj.waitForTimeout(2000);
+
+      // Check for explicit login form elements (more reliable than URL/title)
+      const hasLoginForm = await pageObj.$('form[action*="login"], form[action*="signin"], input[type="password"], button[type="submit"]');
+      const hasLoginInputs = await pageObj.$('input[type="email"], input[type="text"][name*="user"], input[type="text"][name*="email"]');
+      
+      // Check if we're on a login page with form elements
+      const isOnLoginPage = (currentUrl.includes('login') || 
                            currentUrl.includes('signin') || 
-                           currentUrl.includes('auth') ||
-                           pageTitle.toLowerCase().includes('sign in') ||
-                           pageTitle.toLowerCase().includes('log in');
+                           currentUrl.includes('auth')) && 
+                           (hasLoginForm || hasLoginInputs);
 
       if (isOnLoginPage) {
         // Check if it's specifically a 2FA page
-        const has2FA = await page.$('input[type="tel"], #totpPin, [data-primary-action="verify"], input[name="totp"], input[name="code"]');
+        const has2FA = await pageObj.$('input[type="tel"], #totpPin, [data-primary-action="verify"], input[name="totp"], input[name="code"]');
         
         if (has2FA) {
           return {
@@ -185,10 +211,40 @@ export class SessionManager {
           };
         }
 
+        // Check if there are any error messages indicating invalid credentials
+        const hasError = await pageObj.$('.error, .alert-danger, [class*="error"], [class*="invalid"]');
+        if (hasError) {
+          return {
+            isValid: false,
+            needsReconnect: true,
+            errorMessage: 'Invalid credentials - re-authentication required'
+          };
+        }
+
         return {
           isValid: false,
           needsReconnect: true,
           errorMessage: 'Session expired - re-authentication required'
+        };
+      }
+
+      // Additional checks for common success indicators
+      const hasUserMenu = await pageObj.$('[data-testid*="user"], .user-menu, [class*="user"], [class*="profile"]');
+      const hasLogoutButton = await pageObj.$('a[href*="logout"], button[onclick*="logout"], [data-testid*="logout"]');
+      
+      if (hasUserMenu || hasLogoutButton) {
+        return {
+          isValid: true,
+          needsReconnect: false
+        };
+      }
+
+      // If we're not on a login page and no explicit success indicators, 
+      // but also no login form, consider it valid
+      if (!hasLoginForm && !hasLoginInputs) {
+        return {
+          isValid: true,
+          needsReconnect: false
         };
       }
 
@@ -214,27 +270,53 @@ export class SessionManager {
   static calculateSessionExpiry(sessionData: SessionData): Date | null {
     try {
       if (!sessionData.cookies || sessionData.cookies.length === 0) {
-        return null;
+        // If no cookies, assume session is valid for 1 hour
+        return new Date(Date.now() + 60 * 60 * 1000);
       }
 
       // Find the cookie with the longest expiry
       let maxExpiry = 0;
+      let hasSessionCookie = false;
       
       for (const cookie of sessionData.cookies) {
+        // Check for session-related cookies
+        if (cookie.name.toLowerCase().includes('session') || 
+            cookie.name.toLowerCase().includes('auth') ||
+            cookie.name.toLowerCase().includes('token')) {
+          hasSessionCookie = true;
+        }
+        
         if (cookie.expires && cookie.expires > maxExpiry) {
           maxExpiry = cookie.expires;
         }
       }
 
       if (maxExpiry > 0) {
-        return new Date(maxExpiry * 1000); // Convert from seconds to milliseconds
+        const expiryDate = new Date(maxExpiry * 1000); // Convert from seconds to milliseconds
+        
+        // If the expiry is more than 30 days in the future, cap it at 7 days
+        // This prevents extremely long sessions that might be invalid
+        const maxSessionDays = 7;
+        const maxExpiryDate = new Date(Date.now() + maxSessionDays * 24 * 60 * 60 * 1000);
+        
+        if (expiryDate > maxExpiryDate) {
+          return maxExpiryDate;
+        }
+        
+        return expiryDate;
       }
 
-      // If no explicit expiry, assume 24 hours from now
-      return new Date(Date.now() + 24 * 60 * 60 * 1000);
+      // If we have session cookies but no explicit expiry, assume 4 hours
+      if (hasSessionCookie) {
+        return new Date(Date.now() + 4 * 60 * 60 * 1000);
+      }
+
+      // If no session cookies, assume 1 hour
+      return new Date(Date.now() + 60 * 60 * 1000);
     } catch (error) {
       console.error('Failed to calculate session expiry:', error);
-      return null;
+      // Default to 1 hour if calculation fails
+      return new Date(Date.now() + 60 * 60 * 1000);
     }
   }
 

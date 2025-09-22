@@ -22,16 +22,7 @@ export const loginStepSchema = z.object({
   errorIndicators: z.array(z.string()).optional(), // CSS selectors or text patterns
 });
 
-export const loginTemplateSchema = z.object({
-  id: z.string(),
-  name: z.string(),
-  description: z.string(),
-  loginUrl: z.string().url(),
-  steps: z.array(loginStepSchema),
-  fields: z.array(loginFieldSchema),
-  successUrlPattern: z.string().optional(),
-  errorUrlPattern: z.string().optional(),
-});
+// loginTemplateSchema removed - using screen recording approach instead
 
 // Login schemas
 export const createLoginSchema = z.object({
@@ -40,14 +31,7 @@ export const createLoginSchema = z.object({
   username: z.string().min(1, 'Username is required'),
   password: z.string().optional(),
   oauthToken: z.string().optional(),
-  // Generic configuration
-  templateId: z.string().optional(), // Predefined template
-  customConfig: z.object({
-    steps: z.array(loginStepSchema).optional(),
-    fields: z.array(loginFieldSchema).optional(),
-    successUrlPattern: z.string().optional(),
-    errorUrlPattern: z.string().optional(),
-  }).optional(),
+  // Template-based configuration removed - using screen recording approach instead
   // Test immediately on creation
   testOnCreate: z.boolean().default(true),
 }).refine(
@@ -292,7 +276,7 @@ export const summarizeWithEventsSchema = z.object({
 // Type exports
 export type LoginField = z.infer<typeof loginFieldSchema>;
 export type LoginStep = z.infer<typeof loginStepSchema>;
-export type LoginTemplate = z.infer<typeof loginTemplateSchema>;
+// LoginTemplate type removed - using screen recording approach instead
 export type CreateLoginInput = z.infer<typeof createLoginSchema>;
 export type UpdateLoginInput = z.infer<typeof updateLoginSchema>;
 export type CreateAgentInput = z.infer<typeof createAgentSchema>;

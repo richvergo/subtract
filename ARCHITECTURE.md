@@ -29,6 +29,49 @@ This document provides a comprehensive overview of the vergo automation platform
                     └─────────────────┘
 ```
 
+## 🧠 LLM Integration Architecture
+
+### **New 4-Step Agent Creation with LLM**
+```mermaid
+graph TD
+    A[Step 1: Choose Login] --> B[Step 2: Record Workflow]
+    B --> C[Step 3: LLM Summary]
+    C --> D[Step 4: Test Workflow]
+    
+    B --> E[Screen Recording]
+    E --> F[Multi-signal Capture]
+    F --> G[Store Recording]
+    
+    C --> H[LLM Analysis]
+    H --> I[Generate Summary]
+    I --> J[Build User Confidence]
+    
+    D --> K[Execute Workflow]
+    K --> L[Validate Success]
+    L --> M[Agent Ready]
+```
+
+### **LLM Service Integration**
+```mermaid
+graph LR
+    A[User Recording] --> B[LLM Service]
+    B --> C[Workflow Analysis]
+    C --> D[Confidence Summary]
+    D --> E[User Approval]
+    E --> F[Agent Creation]
+    
+    G[Login Recording] --> H[LLM Service]
+    H --> I[Login Analysis]
+    I --> J[Workflow Extraction]
+    J --> K[Login Agent]
+```
+
+**Key LLM Methods:**
+- `summarizeWorkflow()` - Generates user-friendly workflow summaries
+- `analyzeRecording()` - Extracts login workflows from recordings
+- `annotateWorkflow()` - Adds intent annotations to agent steps
+- `repairSelector()` - Self-healing selector repair
+
 ## 🔄 Core Workflows
 
 ### 1. **Create Agent** (Multi-Signal Recording + Processing)
@@ -252,6 +295,56 @@ model AgentRun {
   userFeedback    String?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
+}
+```
+
+## 🚀 New API Endpoints (LLM Integration)
+
+### **Agent Creation & LLM Processing**
+```typescript
+// 4-Step Agent Creation
+POST /api/agents/record
+- Creates agent with login association
+- Handles multipart form data with recording
+- Associates selected login with agent
+
+POST /api/agents/[id]/summarize-workflow
+- Generates AI summary of recorded workflow
+- Builds user confidence with structured output
+- Returns user-friendly workflow description
+
+POST /api/agents/[id]/test-workflow
+- Executes agent workflow in test mode
+- Validates automation works correctly
+- Returns success/failure with details
+```
+
+### **Login Recording & AI Analysis**
+```typescript
+POST /api/logins
+- Enhanced to handle multipart form data
+- Accepts screen recordings with login credentials
+- Triggers automatic LLM analysis
+
+POST /api/logins/[id]/analyze
+- AI analysis of login recording
+- Extracts workflow steps and selectors
+- Generates login automation workflow
+- Stores analysis in customConfig field
+```
+
+### **LLM Service Methods**
+```typescript
+class LLMService {
+  // New method for workflow summarization
+  async summarizeWorkflow(recordedSteps: any[], transcript?: string): Promise<string>
+  
+  // Enhanced login analysis
+  async analyzeRecording(recordingUrl: string, prompt: string): Promise<string>
+  
+  // Existing methods
+  async annotateWorkflow(recordedSteps: AgentConfig, userPrompt: string): Promise<AgentIntents>
+  async repairSelector(failedSelector: string, intent: string, domSnapshot: string): Promise<RepairResult>
 }
 ```
 

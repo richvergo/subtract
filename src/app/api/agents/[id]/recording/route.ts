@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import { authOptions } from '@/lib/auth-config';
 import { db } from '@/lib/db';
 import { getUserEmailForQuery } from '@/lib/auth';
 import { readFile } from 'fs/promises';
@@ -92,7 +92,7 @@ export async function GET(
         : 'application/octet-stream';
 
       // Return file with appropriate headers
-      return new NextResponse(fileBuffer, {
+      return new NextResponse(fileBuffer as BodyInit, {
         status: 200,
         headers: {
           'Content-Type': contentType,
@@ -110,12 +110,12 @@ export async function GET(
       );
     }
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('[agents/recording] Error', {
-      message: error?.message,
-      stack: error?.stack,
-      name: error?.name,
-      cause: error?.cause,
+      message: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined,
+      name: error instanceof Error ? error.name : undefined,
+      cause: error instanceof Error ? error.cause : undefined,
     });
 
     return NextResponse.json(
