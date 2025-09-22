@@ -91,22 +91,20 @@ export async function POST(request: NextRequest) {
 
     // Handle both JSON and FormData requests
     let validatedData;
-    let recordingFile: File | null = null;
     
     const contentType = request.headers.get('content-type');
     console.log('Content-Type:', contentType);
     
     if (contentType?.includes('multipart/form-data')) {
-      // Handle FormData (with recording)
+      // Handle FormData
       const formData = await request.formData();
       const name = formData.get('name') as string;
       const loginUrl = formData.get('loginUrl') as string;
       const username = formData.get('username') as string;
       const password = formData.get('password') as string;
       const testOnCreate = formData.get('testOnCreate') === 'true';
-      recordingFile = formData.get('recording') as File;
       
-      console.log('FormData received:', { name, loginUrl, username, testOnCreate, hasRecording: !!recordingFile });
+      console.log('FormData received:', { name, loginUrl, username, testOnCreate });
       
       // Validate required fields
       if (!name || !loginUrl || !username || !password) {
@@ -122,7 +120,6 @@ export async function POST(request: NextRequest) {
         username,
         password,
         testOnCreate,
-        // templateId removed - using screen recording approach instead
         customConfig: null,
         oauthToken: null
       };
@@ -130,38 +127,6 @@ export async function POST(request: NextRequest) {
       // Handle JSON (existing behavior)
       const body = await request.json();
       validatedData = createLoginSchema.parse(body);
-    }
-
-    // Handle recording file if provided
-    let recordingUrl: string | null = null;
-    if (recordingFile && recordingFile.size > 0) {
-      try {
-        console.log('Processing recording file:', { size: recordingFile.size, type: recordingFile.type });
-        
-        // Ensure uploads directory exists
-        const uploadsDir = join(process.cwd(), 'uploads', 'logins');
-        if (!existsSync(uploadsDir)) {
-          await mkdir(uploadsDir, { recursive: true });
-        }
-
-        // Generate unique filename
-        const timestamp = Date.now();
-        const filename = `login_${timestamp}.webm`;
-        const filePath = join(uploadsDir, filename);
-
-        // Save file to disk
-        const bytes = await recordingFile.arrayBuffer();
-        const buffer = Buffer.from(bytes);
-        await writeFile(filePath, buffer);
-
-        recordingUrl = `/uploads/logins/${filename}`;
-        console.log('Recording saved:', recordingUrl);
-      } catch (error) {
-        console.error('Failed to save recording file:', error);
-        // Continue without recording rather than failing
-      }
-    } else {
-      console.log('No recording file provided or file is empty');
     }
 
     // Encrypt credentials before saving
@@ -173,8 +138,7 @@ export async function POST(request: NextRequest) {
 
     console.log('Creating login with data:', { 
       name: validatedData.name, 
-      loginUrl: validatedData.loginUrl, 
-      hasRecording: !!recordingUrl 
+      loginUrl: validatedData.loginUrl
     });
     
     const login = await db.login.create({
@@ -184,42 +148,13 @@ export async function POST(request: NextRequest) {
         username: encryptedCredentials.username,
         password: encryptedCredentials.password,
         oauthToken: encryptedCredentials.oauthToken,
-        // templateId removed - using screen recording approach instead
-        recordingUrl: recordingUrl,
+        recordingUrl: null,
         ownerId: user.id,
+        status: 'NEEDS_TESTING' // Set status to needs testing
       },
     });
     
     console.log('Login created successfully:', login.id);
-
-    // If recording was provided, trigger analysis
-    if (recordingUrl) {
-      console.log('Triggering login analysis...');
-      try {
-        // Call LLM service directly instead of HTTP request
-        const { llmService } = await import('@/lib/llm-service');
-        
-        const analysisResult = await llmService.analyzeLoginRecording({
-          name: login.name,
-          loginUrl: login.loginUrl
-        });
-        
-        // Update login with analysis results
-        await db.login.update({
-          where: { id: login.id },
-          data: {
-            analysisResult: JSON.stringify(analysisResult),
-            analysisStatus: 'COMPLETED',
-            status: 'NEEDS_TESTING' // Set status to needs testing when analysis is complete
-          }
-        });
-        
-        console.log('Login analysis completed successfully');
-      } catch (analysisError) {
-        console.error('Failed to trigger login analysis:', analysisError);
-        // Continue without failing the login creation
-      }
-    }
 
     // Return masked credentials
     const maskedLogin = {

@@ -46,6 +46,8 @@ export async function POST(request: NextRequest) {
     let loginId: string;
     let file: File | null = null;
     let recordedSteps: unknown[] = [];
+    let capturedActions: unknown[] = [];
+    let captureSession: unknown = null;
     
     const contentType = request.headers.get('content-type');
     
@@ -56,6 +58,26 @@ export async function POST(request: NextRequest) {
       purposePrompt = formData.get('purposePrompt') as string;
       loginId = formData.get('loginId') as string;
       file = formData.get('file') as File;
+      
+      // Parse captured actions if provided
+      const capturedActionsStr = formData.get('capturedActions') as string;
+      if (capturedActionsStr) {
+        try {
+          capturedActions = JSON.parse(capturedActionsStr);
+        } catch (error) {
+          console.warn('Failed to parse captured actions:', error);
+        }
+      }
+      
+      // Parse capture session if provided
+      const captureSessionStr = formData.get('captureSession') as string;
+      if (captureSessionStr) {
+        try {
+          captureSession = JSON.parse(captureSessionStr);
+        } catch (error) {
+          console.warn('Failed to parse capture session:', error);
+        }
+      }
     } else {
       // Handle JSON (for tests)
       const body = await request.json();
@@ -63,6 +85,8 @@ export async function POST(request: NextRequest) {
       purposePrompt = body.purposePrompt;
       loginId = body.loginIds?.[0] || body.loginId;
       recordedSteps = body.recordedSteps || [];
+      capturedActions = body.capturedActions || [];
+      captureSession = body.captureSession || null;
     }
 
     // Validate required fields
@@ -133,10 +157,16 @@ export async function POST(request: NextRequest) {
         data: {
           name: name.trim(),
           description: file 
-            ? `Agent created with screen recording (${Math.round(file.size / 1024)}KB)`
+            ? `Agent created with screen recording (${Math.round(file.size / 1024)}KB) and ${capturedActions.length} captured actions`
             : `Agent created with recorded steps (${recordedSteps.length} steps)`,
           purposePrompt: purposePrompt?.trim() || "Workflow will be defined after recording analysis",
-          agentConfig: JSON.stringify(recordedSteps.length > 0 ? recordedSteps : []), // Use recordedSteps if available
+          agentConfig: JSON.stringify({
+            recordedSteps: recordedSteps.length > 0 ? recordedSteps : [],
+            capturedActions: capturedActions,
+            captureSession: captureSession,
+            hasVideoRecording: !!file,
+            hasActionCapture: capturedActions.length > 0
+          }),
           agentIntents: JSON.stringify([]), // Empty intents for now
           recordingUrl: filePath ? `/uploads/agents/${filePath.split('/').pop()}` : null,
           ownerId: user.id,

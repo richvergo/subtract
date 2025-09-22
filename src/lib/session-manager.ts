@@ -13,6 +13,7 @@ export interface SessionData {
     value: string;
     domain?: string;
     path?: string;
+    url?: string;
     expires?: number;
     httpOnly?: boolean;
     secure?: boolean;
@@ -133,7 +134,7 @@ export class SessionManager {
     try {
       const pageObj = page as {
         setUserAgent: (userAgent: string) => Promise<void>;
-        setCookie: (...cookies: Array<{ name: string; value: string; domain?: string; path?: string }>) => Promise<void>;
+        setCookie: (...cookies: Array<{ name: string; value: string; domain?: string; path?: string; url?: string }>) => Promise<void>;
         evaluate: (fn: (localStorage?: Record<string, string>) => void, data?: Record<string, string>) => Promise<void>;
       };
       // Set user agent
@@ -143,29 +144,49 @@ export class SessionManager {
 
       // Set cookies
       if (sessionData.cookies && sessionData.cookies.length > 0) {
-        await pageObj.setCookie(...sessionData.cookies);
+        // Ensure cookies have required url or domain property
+        const validCookies = sessionData.cookies.map(cookie => {
+          if (!cookie.domain && !cookie.url) {
+            // If no domain or url specified, use a default domain
+            return { ...cookie, domain: '.localhost' };
+          }
+          return cookie;
+        });
+        await pageObj.setCookie(...validCookies);
       }
 
-      // Set localStorage
+      // Set localStorage (with error handling for security restrictions)
       if (sessionData.localStorage) {
-        await pageObj.evaluate((localStorage) => {
-          for (const [key, value] of Object.entries(localStorage || {})) {
-            window.localStorage.setItem(key, value);
-          }
-        }, sessionData.localStorage);
+        try {
+          await pageObj.evaluate((localStorage) => {
+            for (const [key, value] of Object.entries(localStorage || {})) {
+              window.localStorage.setItem(key, value);
+            }
+          }, sessionData.localStorage);
+        } catch (error) {
+          console.warn('Failed to set localStorage (security restriction):', error);
+          // Continue without localStorage - this is often blocked in headless browsers
+        }
       }
 
-      // Set sessionStorage
+      // Set sessionStorage (with error handling for security restrictions)
       if (sessionData.sessionStorage) {
-        await pageObj.evaluate((sessionStorage) => {
-          for (const [key, value] of Object.entries(sessionStorage || {})) {
-            window.sessionStorage.setItem(key, value);
-          }
-        }, sessionData.sessionStorage);
+        try {
+          await pageObj.evaluate((sessionStorage) => {
+            for (const [key, value] of Object.entries(sessionStorage || {})) {
+              window.sessionStorage.setItem(key, value);
+            }
+          }, sessionData.sessionStorage);
+        } catch (error) {
+          console.warn('Failed to set sessionStorage (security restriction):', error);
+          // Continue without sessionStorage - this is often blocked in headless browsers
+        }
       }
     } catch (error) {
       console.error('Failed to apply session to page:', error);
-      throw new Error('Session application failed');
+      // Don't throw error - session application is optional for login testing
+      // Many sites work fine without session data
+      console.warn('Continuing without session data - this may affect some functionality');
     }
   }
 

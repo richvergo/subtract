@@ -1,9 +1,10 @@
 "use client"
 
-import { useState, useRef, useEffect, useCallback, memo } from "react"
+import React, { useState, useRef, useEffect, useCallback, memo } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import useSWR from 'swr'
+import { useActionCapture } from '@/lib/hooks/use-action-capture'
 
 // New 4-Step Agent Creation Wizard
 // 1. Choose Login: Select which login to use for this agent
@@ -13,10 +14,11 @@ import useSWR from 'swr'
 
 // Step definitions for the new wizard
 const STEPS = [
-  { id: 1, title: "Choose Login", description: "Select login credentials" },
-  { id: 2, title: "Record Workflow", description: "Capture your process" },
-  { id: 3, title: "LLM Summary", description: "AI understands your workflow" },
-  { id: 4, title: "Test Workflow", description: "Verify automation works" }
+  { id: 1, title: "Name Agent", description: "Give your agent a name and description" },
+  { id: 2, title: "Choose Login (Optional)", description: "Select login credentials or skip for public sites" },
+  { id: 3, title: "Record Workflow", description: "Capture your process" },
+  { id: 4, title: "LLM Summary", description: "AI understands your workflow" },
+  { id: 5, title: "Test Workflow", description: "Verify automation works" }
 ] as const
 
 type StepId = typeof STEPS[number]['id']
@@ -24,15 +26,149 @@ type StepId = typeof STEPS[number]['id']
 // Fetcher for logins
 const fetcher = (url: string) => fetch(url).then((res) => res.json())
 
-// Step 1: Choose Login - Memoized to prevent re-mounting
-interface Step1LoginProps {
-  selectedLoginId: string
-  onLoginSelect: (loginId: string) => void
+// Step 1: Name Agent - Memoized to prevent re-mounting
+interface Step1NameProps {
+  agentName: string
+  agentDescription: string
+  onNameChange: (name: string) => void
+  onDescriptionChange: (description: string) => void
   isStep1Valid: () => boolean
   onNextStep: () => void
 }
 
-const Step1Login = memo(({ selectedLoginId, onLoginSelect, isStep1Valid, onNextStep }: Step1LoginProps) => {
+const Step1Name = memo(({ agentName, agentDescription, onNameChange, onDescriptionChange, isStep1Valid, onNextStep }: Step1NameProps) => {
+  return (
+    <div style={{
+      backgroundColor: "#fff",
+      borderRadius: "8px",
+      border: "1px solid #dee2e6",
+      padding: "32px",
+      maxWidth: "600px",
+      margin: "0 auto"
+    }}>
+      <h2 style={{
+        fontSize: "24px",
+        fontWeight: "600",
+        marginBottom: "8px",
+        color: "#333"
+      }}>
+        🤖 Name Your Agent
+      </h2>
+      
+      <p style={{
+        fontSize: "16px",
+        color: "#6c757d",
+        marginBottom: "32px",
+        lineHeight: "1.5"
+      }}>
+        Give your automation agent a clear name and description so you can easily identify it later.
+      </p>
+
+      <div style={{ marginBottom: "24px" }}>
+        <label style={{
+          display: "block",
+          fontSize: "14px",
+          fontWeight: "500",
+          color: "#495057",
+          marginBottom: "8px"
+        }}>
+          Agent Name *
+        </label>
+        <input
+          type="text"
+          value={agentName}
+          onChange={(e: React.ChangeEvent<HTMLInputElement>) => onNameChange(e.target.value)}
+          placeholder="e.g., Invoice Processing, Data Entry Automation, etc."
+          style={{
+            width: "100%",
+            padding: "12px 16px",
+            border: "1px solid #ced4da",
+            borderRadius: "6px",
+            fontSize: "16px",
+            boxSizing: "border-box"
+          }}
+          required
+        />
+      </div>
+
+      <div style={{ marginBottom: "32px" }}>
+        <label style={{
+          display: "block",
+          fontSize: "14px",
+          fontWeight: "500",
+          color: "#495057",
+          marginBottom: "8px"
+        }}>
+          Description (Optional)
+        </label>
+        <textarea
+          value={agentDescription}
+          onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => onDescriptionChange(e.target.value)}
+          placeholder="Describe what this agent will do, when you'll use it, or any special notes..."
+          rows={4}
+          style={{
+            width: "100%",
+            padding: "12px 16px",
+            border: "1px solid #ced4da",
+            borderRadius: "6px",
+            fontSize: "16px",
+            boxSizing: "border-box",
+            resize: "vertical",
+            fontFamily: "inherit"
+          }}
+        />
+      </div>
+
+      <div style={{
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center"
+      }}>
+        <Link href="/agents" style={{
+          color: "#6c757d",
+          textDecoration: "none",
+          fontSize: "14px",
+          padding: "8px 16px",
+          borderRadius: "6px",
+          border: "1px solid #dee2e6",
+          transition: "all 0.2s ease"
+        }}>
+          ← Back to Agents
+        </Link>
+        
+        <button
+          onClick={onNextStep}
+          disabled={!isStep1Valid()}
+          style={{
+            background: isStep1Valid() ? "#007bff" : "#6c757d",
+            color: "#fff",
+            border: "none",
+            padding: "12px 24px",
+            borderRadius: "6px",
+            fontSize: "16px",
+            fontWeight: "500",
+            cursor: isStep1Valid() ? "pointer" : "not-allowed",
+            transition: "background-color 0.2s ease"
+          }}
+        >
+          Next: Choose Login (Optional) →
+        </button>
+      </div>
+    </div>
+  )
+})
+
+Step1Name.displayName = 'Step1Name'
+
+// Step 2: Choose Login (Optional) - Memoized to prevent re-mounting
+interface Step2LoginProps {
+  selectedLoginId: string
+  onLoginSelect: (loginId: string) => void
+  isStep2Valid: () => boolean
+  onNextStep: () => void
+}
+
+const Step2Login = memo(({ selectedLoginId, onLoginSelect, isStep2Valid, onNextStep }: Step2LoginProps) => {
   const { data: logins, error, isLoading } = useSWR('/api/logins', fetcher)
 
   if (isLoading) return <div>Loading logins...</div>
@@ -53,17 +189,57 @@ const Step1Login = memo(({ selectedLoginId, onLoginSelect, isStep1Valid, onNextS
         margin: "0 0 8px 0",
         color: "#333"
       }}>
-        Step 1: Choose Login
+        🔐 Choose Login (Optional)
       </h2>
       <p style={{
         color: "#666",
         fontSize: "16px",
         margin: "0 0 32px 0"
       }}>
-        Select which login credentials this agent should use to access the system.
+        Select login credentials if your agent needs to access authenticated areas. 
+        Skip this step for public websites or generic workflows.
       </p>
 
       <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+        {/* No Login Required Option */}
+        <div
+          onClick={() => onLoginSelect("SKIP")}
+          style={{
+            padding: "16px",
+            border: selectedLoginId === "SKIP" ? "2px solid #28a745" : "1px solid #dee2e6",
+            borderRadius: "8px",
+            cursor: "pointer",
+            backgroundColor: selectedLoginId === "SKIP" ? "#f8fff9" : "#fff",
+            transition: "all 0.2s ease"
+          }}
+        >
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div>
+              <h4 style={{ margin: "0 0 4px 0", fontSize: "16px", fontWeight: "600", color: "#28a745" }}>
+                🌐 No Login Required
+              </h4>
+              <p style={{ margin: "0", fontSize: "14px", color: "#666" }}>
+                For public websites, generic workflows, or sites that don't require authentication
+              </p>
+            </div>
+            <div style={{
+              width: "20px",
+              height: "20px",
+              borderRadius: "50%",
+              border: selectedLoginId === "SKIP" ? "2px solid #28a745" : "2px solid #dee2e6",
+              backgroundColor: selectedLoginId === "SKIP" ? "#28a745" : "transparent",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              color: "#fff",
+              fontSize: "12px"
+            }}>
+              {selectedLoginId === "SKIP" && "✓"}
+            </div>
+          </div>
+        </div>
+
+        {/* Existing Login Options */}
         {logins?.logins?.map((login: { id: string; name: string; loginUrl: string }) => (
           <div
             key={login.id}
@@ -104,29 +280,29 @@ const Step1Login = memo(({ selectedLoginId, onLoginSelect, isStep1Valid, onNextS
           </div>
         ))}
         
-        {(!logins?.logins || logins.logins.length === 0) && (
-          <div style={{
-            padding: "24px",
-            textAlign: "center",
-            color: "#666",
-            backgroundColor: "#f8f9fa",
-            borderRadius: "8px",
-            border: "1px solid #e9ecef"
-          }}>
-            <p style={{ margin: "0 0 16px 0" }}>No logins available</p>
-            <Link 
-              href="/logins" 
-              style={{ 
-                color: "#007bff", 
-                textDecoration: "none",
-                fontSize: "14px",
-                fontWeight: "500"
-              }}
-            >
-              Create a login first →
-            </Link>
-          </div>
-        )}
+        {/* Create Login Link */}
+        <div style={{
+          padding: "16px",
+          textAlign: "center",
+          backgroundColor: "#f8f9fa",
+          borderRadius: "8px",
+          border: "1px dashed #dee2e6"
+        }}>
+          <p style={{ margin: "0 0 12px 0", color: "#666", fontSize: "14px" }}>
+            Need to create a new login for a specific site?
+          </p>
+          <Link 
+            href="/logins" 
+            style={{ 
+              color: "#007bff", 
+              textDecoration: "none",
+              fontSize: "14px",
+              fontWeight: "500"
+            }}
+          >
+            ➕ Create New Login
+          </Link>
+        </div>
       </div>
 
       <div style={{ 
@@ -149,28 +325,27 @@ const Step1Login = memo(({ selectedLoginId, onLoginSelect, isStep1Valid, onNextS
         </Link>
         <button 
           onClick={onNextStep}
-          disabled={!isStep1Valid()}
           style={{ 
-            background: isStep1Valid() ? "#007bff" : "#6c757d",
+            background: "#007bff", // Always enabled now
             color: "#fff",
             padding: "12px 24px",
             border: "none",
             borderRadius: "6px",
             fontSize: "14px",
             fontWeight: "600",
-            cursor: isStep1Valid() ? "pointer" : "not-allowed",
-            transition: "background-color 0.2s ease",
-            opacity: isStep1Valid() ? 1 : 0.6
+            cursor: "pointer",
+            transition: "background-color 0.2s ease"
           }}
         >
-          Next → Record
+          {selectedLoginId === "SKIP" ? "Next → Record (No Login)" : 
+           selectedLoginId ? "Next → Record (With Login)" : "Next → Record"}
         </button>
       </div>
     </div>
   )
 })
 
-Step1Login.displayName = 'Step1Login'
+Step2Login.displayName = 'Step2Login'
 
 export default function CreateAgentPage() {
   const router = useRouter()
@@ -179,19 +354,34 @@ export default function CreateAgentPage() {
   const [currentStep, setCurrentStep] = useState<StepId>(1)
   const [agentId, setAgentId] = useState<string | null>(null)
   
-  // Step 1: Login Selection
+  // Step 1: Agent Name & Description
+  const [agentName, setAgentName] = useState("")
+  const [agentDescription, setAgentDescription] = useState("")
+  
+  // Step 2: Login Selection
   const [selectedLoginId, setSelectedLoginId] = useState("")
   
-  // Step 2: Recording
+  // Step 3: Recording
   const [isRecording, setIsRecording] = useState(false)
   const [hasRecording, setHasRecording] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   
-  // Step 3: LLM Summary
+  // Action capture hook
+  const {
+    isCapturing: isActionCapturing,
+    actions: capturedActions,
+    actionsCount,
+    session: captureSession,
+    startCapture: startActionCapture,
+    stopCapture: stopActionCapture,
+    clearActions: clearCapturedActions
+  } = useActionCapture()
+  
+  // Step 4: LLM Summary
   const [workflowSummary, setWorkflowSummary] = useState("")
   const [isSummarizing, setIsSummarizing] = useState(false)
   
-  // Step 4: Testing
+  // Step 5: Testing
   const [testResult, setTestResult] = useState<{ success: boolean; error?: string } | null>(null)
   const [isTesting, setIsTesting] = useState(false)
   
@@ -205,14 +395,15 @@ export default function CreateAgentPage() {
   const recordingBlobRef = useRef<Blob | null>(null)
 
   // Validation for each step
-  const isStep1Valid = () => selectedLoginId !== ""
-  const isStep2Valid = hasRecording && !isRecording
-  const isStep3Valid = () => workflowSummary !== ""
-  const isStep4Valid = () => testResult?.success === true
+  const isStep1Valid = () => agentName.trim() !== ""
+  const isStep2Valid = () => true // Always valid now - login is optional
+  const isStep3Valid = () => hasRecording && !isRecording
+  const isStep4Valid = () => workflowSummary !== ""
+  const isStep5Valid = () => testResult?.success === true
 
   // Step navigation functions
   const nextStep = () => {
-    if (currentStep < 4) {
+    if (currentStep < 5) {
       setCurrentStep((currentStep + 1) as StepId)
     }
   }
@@ -286,6 +477,10 @@ export default function CreateAgentPage() {
   const startRecording = async () => {
     try {
       setError("")
+      
+      // Start action capture first
+      startActionCapture()
+      
       const stream = await navigator.mediaDevices.getDisplayMedia({ 
         video: true,
         audio: true 
@@ -333,6 +528,8 @@ export default function CreateAgentPage() {
     } catch (err) {
       console.error('Error starting recording:', err)
       setError("Failed to start recording. Please ensure you grant screen sharing permissions.")
+      // Stop action capture if screen recording fails
+      stopActionCapture()
     }
   }
 
@@ -340,6 +537,10 @@ export default function CreateAgentPage() {
     if (mediaRecorderRef.current && isRecording) {
       mediaRecorderRef.current.stop()
       setIsRecording(false)
+      
+      // Stop action capture
+      const capturedActions = stopActionCapture()
+      console.log(`🎬 Captured ${capturedActions.length} actions during recording`)
     }
   }
 
@@ -350,20 +551,27 @@ export default function CreateAgentPage() {
       return
     }
 
-    if (!selectedLoginId) {
-      setError("Please select a login first")
-      return
-    }
-
     setIsSaving(true)
     setError("")
 
     try {
       // Build FormData object for multipart upload
       const formData = new FormData()
-      formData.append("name", `Agent ${Date.now()}`) // Auto-generate name
+      formData.append("name", agentName) // Use user-provided name
+      formData.append("purposePrompt", agentDescription) // Include description as purposePrompt
       formData.append("file", recordingBlobRef.current, "recording.webm")
-      formData.append("loginId", selectedLoginId) // Include selected login
+      
+      // Only include loginId if not "SKIP"
+      if (selectedLoginId && selectedLoginId !== "SKIP") {
+        formData.append("loginId", selectedLoginId)
+      }
+      
+      // Include captured actions as JSON
+      if (capturedActions.length > 0) {
+        formData.append("capturedActions", JSON.stringify(capturedActions))
+        formData.append("captureSession", JSON.stringify(captureSession))
+        console.log(`📤 Sending ${capturedActions.length} captured actions to server`)
+      }
 
       // Send to the record endpoint with FormData
       const response = await fetch('/api/agents/record', {
@@ -468,7 +676,7 @@ export default function CreateAgentPage() {
 
 
   // Step 3: LLM Summary
-  const Step3Summary = () => (
+  const Step4Summary = () => (
     <div style={{
       backgroundColor: "#fff",
       borderRadius: "8px",
@@ -594,7 +802,7 @@ export default function CreateAgentPage() {
   )
 
   // Step 4: Test Workflow
-  const Step4Test = () => (
+  const Step5Test = () => (
     <div style={{
       backgroundColor: "#fff",
       borderRadius: "8px",
@@ -722,7 +930,7 @@ export default function CreateAgentPage() {
   )
 
   // Step 2: Recording
-  const Step2Recording = () => (
+  const Step3Recording = () => (
     <div style={{
       backgroundColor: "#fff",
       borderRadius: "8px",
@@ -763,7 +971,7 @@ export default function CreateAgentPage() {
           alignItems: "center",
           gap: "8px"
         }}>
-          📹 Screen Recording
+          📹 Screen Recording & Action Capture
         </h4>
         
         {/* Status Label */}
@@ -788,12 +996,12 @@ export default function CreateAgentPage() {
                 borderRadius: "50%",
                 animation: "pulse 1s infinite"
               }} />
-              Recording in progress...
+              Recording in progress... ({actionsCount} actions captured)
             </>
           ) : hasRecording ? (
             <>
               <span>✅</span>
-              Recording complete ({recordingBlobRef.current ? Math.round(recordingBlobRef.current.size / (1024 * 1024) * 10) / 10 : 0}MB)
+              Recording complete ({recordingBlobRef.current ? Math.round(recordingBlobRef.current.size / (1024 * 1024) * 10) / 10 : 0}MB, {actionsCount} actions)
             </>
           ) : (
             <>
@@ -802,6 +1010,35 @@ export default function CreateAgentPage() {
             </>
           )}
         </div>
+        
+        {/* Action Capture Details */}
+        {actionsCount > 0 && (
+          <div style={{
+            fontSize: "12px",
+            marginBottom: "16px",
+            padding: "8px 12px",
+            backgroundColor: "#e8f4fd",
+            borderRadius: "6px",
+            border: "1px solid #b8daff",
+            color: "#004085"
+          }}>
+            <strong>🎯 Captured Actions:</strong> {actionsCount} interactions recorded
+            {capturedActions.length > 0 && (
+              <div style={{ marginTop: "4px", fontSize: "11px" }}>
+                {capturedActions.slice(0, 3).map((action, index) => (
+                  <div key={index} style={{ marginBottom: "2px" }}>
+                    {action.step}. {action.action} {action.target ? `on ${action.target}` : ''}
+                  </div>
+                ))}
+                {capturedActions.length > 3 && (
+                  <div style={{ color: "#6c757d" }}>
+                    ... and {capturedActions.length - 3} more actions
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
         
         {/* Recording Buttons */}
         <div style={{ display: "flex", gap: "12px", alignItems: "center", marginBottom: "16px" }}>
@@ -883,7 +1120,7 @@ export default function CreateAgentPage() {
           margin: 0,
           lineHeight: "1.4"
         }}>
-          Click &quot;Start Recording&quot; to capture your screen and demonstrate the workflow you want to automate.
+          Click &quot;Start Recording&quot; to capture your screen and record all your interactions (clicks, typing, navigation) to demonstrate the workflow you want to automate.
         </p>
       </div>
 
@@ -913,18 +1150,18 @@ export default function CreateAgentPage() {
         
         <button
           onClick={handleSaveRecording}
-          disabled={!isStep2Valid || isSaving}
+          disabled={!isStep2Valid() || isSaving}
           style={{
-            background: isStep2Valid && !isSaving ? "#007bff" : "#6c757d",
+            background: isStep2Valid() && !isSaving ? "#007bff" : "#6c757d",
             color: "#fff",
             padding: "12px 24px",
             border: "none",
             borderRadius: "6px",
             fontSize: "14px",
             fontWeight: "600",
-            cursor: isStep2Valid && !isSaving ? "pointer" : "not-allowed",
+            cursor: isStep2Valid() && !isSaving ? "pointer" : "not-allowed",
             transition: "background-color 0.2s ease",
-            opacity: isStep2Valid && !isSaving ? 1 : 0.6
+            opacity: isStep2Valid() && !isSaving ? 1 : 0.6
           }}
         >
           {isSaving ? "Saving..." : "Save & Continue →"}
@@ -992,16 +1229,26 @@ export default function CreateAgentPage() {
 
       {/* Step Content */}
       {currentStep === 1 && (
-        <Step1Login 
-          selectedLoginId={selectedLoginId}
-          onLoginSelect={handleLoginSelect}
+        <Step1Name 
+          agentName={agentName}
+          agentDescription={agentDescription}
+          onNameChange={setAgentName}
+          onDescriptionChange={setAgentDescription}
           isStep1Valid={isStep1Valid}
           onNextStep={nextStep}
         />
       )}
-      {currentStep === 2 && <Step2Recording />}
-      {currentStep === 3 && <Step3Summary />}
-      {currentStep === 4 && <Step4Test />}
+      {currentStep === 2 && (
+        <Step2Login 
+          selectedLoginId={selectedLoginId}
+          onLoginSelect={handleLoginSelect}
+          isStep2Valid={isStep2Valid}
+          onNextStep={nextStep}
+        />
+      )}
+      {currentStep === 3 && <Step3Recording />}
+      {currentStep === 4 && <Step4Summary />}
+      {currentStep === 5 && <Step5Test />}
 
       {/* CSS for pulse animation */}
       <style jsx>{`

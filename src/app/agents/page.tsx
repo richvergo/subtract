@@ -1,5 +1,6 @@
 "use client"
 
+import { useState } from "react"
 import useSWR from "swr"
 import Link from "next/link"
 
@@ -82,6 +83,104 @@ export default function AgentsPage() {
 
   // Extract agents array from response, handle both direct array and wrapped response
   const agents = data?.agents || (Array.isArray(data) ? data : [])
+
+  // Edit modal state
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false)
+  const [editingAgent, setEditingAgent] = useState<{ id: string; name: string; description?: string } | null>(null)
+  const [editFormData, setEditFormData] = useState({ name: "", description: "" })
+  const [isUpdating, setIsUpdating] = useState(false)
+
+  // Delete confirmation state
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false)
+  const [deletingAgent, setDeletingAgent] = useState<{ id: string; name: string } | null>(null)
+  const [isDeleting, setIsDeleting] = useState(false)
+
+  // Edit agent functions
+  const handleEditAgent = (agentId: string, agentName: string) => {
+    const agent = agents.find(a => a.id === agentId)
+    if (agent) {
+      setEditingAgent({
+        id: agentId,
+        name: agentName,
+        description: agent.description || agent.purposePrompt || ""
+      })
+      setEditFormData({
+        name: agentName,
+        description: agent.description || agent.purposePrompt || ""
+      })
+      setIsEditModalOpen(true)
+    }
+  }
+
+  const handleUpdateAgent = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!editingAgent) return
+
+    setIsUpdating(true)
+    try {
+      const response = await fetch(`/api/agents/${editingAgent.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          name: editFormData.name,
+          description: editFormData.description
+        })
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to update agent')
+      }
+
+      // Refresh the agents list
+      mutate()
+      setIsEditModalOpen(false)
+      setEditingAgent(null)
+    } catch (error) {
+      console.error('Error updating agent:', error)
+      alert('Failed to update agent. Please try again.')
+    } finally {
+      setIsUpdating(false)
+    }
+  }
+
+  // Configure agent function
+  const handleConfigureAgent = (agentId: string, agentName: string) => {
+    // Navigate to the configure page
+    window.location.href = `/agents/${agentId}/configure`
+  }
+
+  // Delete agent functions
+  const handleDeleteAgent = (agentId: string, agentName: string) => {
+    setDeletingAgent({ id: agentId, name: agentName })
+    setIsDeleteModalOpen(true)
+  }
+
+  const confirmDeleteAgent = async () => {
+    if (!deletingAgent) return
+
+    setIsDeleting(true)
+    try {
+      const response = await fetch(`/api/agents/${deletingAgent.id}`, {
+        method: 'DELETE',
+        credentials: 'include'
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to delete agent')
+      }
+
+      // Refresh the agents list
+      mutate()
+      setIsDeleteModalOpen(false)
+      setDeletingAgent(null)
+    } catch (error) {
+      console.error('Error deleting agent:', error)
+      alert('Failed to delete agent. Please try again.')
+    } finally {
+      setIsDeleting(false)
+    }
+  }
 
   if (isLoading) return (
     <div>
@@ -236,7 +335,7 @@ export default function AgentsPage() {
         }}>
           Agents
         </h1>
-        <Link href="/agents/create">
+        <Link href="/agents/create-simple">
           <button style={{
             background: "#007bff", 
             color: "#fff",
@@ -287,7 +386,7 @@ export default function AgentsPage() {
           }}>
             Click Create Agent to add your first one.
           </p>
-          <Link href="/agents/create">
+          <Link href="/agents/create-simple">
             <button style={{
               background: "#007bff", 
               color: "#fff",
@@ -359,6 +458,15 @@ export default function AgentsPage() {
                 }}>
                   Last Run
                 </th>
+                <th style={{ 
+                  textAlign: "center", 
+                  padding: "16px", 
+                  fontWeight: "600",
+                  color: "#495057",
+                  borderBottom: "1px solid #dee2e6"
+                }}>
+                  Actions
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -415,10 +523,310 @@ export default function AgentsPage() {
                   }}>
                     {getLastRun(agent)}
                   </td>
+                  <td style={{ 
+                    padding: "16px",
+                    textAlign: "center"
+                  }}>
+                    <div style={{
+                      display: "flex",
+                      gap: "8px",
+                      justifyContent: "center"
+                    }}>
+                      <button
+                        onClick={() => handleConfigureAgent(agent.id, agent.name)}
+                        style={{
+                          background: "#007bff",
+                          color: "#fff",
+                          border: "none",
+                          padding: "6px 12px",
+                          borderRadius: "4px",
+                          fontSize: "12px",
+                          fontWeight: "500",
+                          cursor: "pointer",
+                          transition: "background-color 0.2s ease"
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.background = "#0056b3"
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.background = "#007bff"
+                        }}
+                      >
+                        Configure
+                      </button>
+                      <button
+                        onClick={() => handleEditAgent(agent.id, agent.name)}
+                        style={{
+                          background: "#6c757d",
+                          color: "#fff",
+                          border: "none",
+                          padding: "6px 12px",
+                          borderRadius: "4px",
+                          fontSize: "12px",
+                          fontWeight: "500",
+                          cursor: "pointer",
+                          transition: "background-color 0.2s ease"
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.background = "#5a6268"
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.background = "#6c757d"
+                        }}
+                      >
+                        Edit
+                      </button>
+                      <button
+                        onClick={() => handleDeleteAgent(agent.id, agent.name)}
+                        style={{
+                          background: "#dc3545",
+                          color: "#fff",
+                          border: "none",
+                          padding: "6px 12px",
+                          borderRadius: "4px",
+                          fontSize: "12px",
+                          fontWeight: "500",
+                          cursor: "pointer",
+                          transition: "background-color 0.2s ease"
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.background = "#c82333"
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.background = "#dc3545"
+                        }}
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* Edit Agent Modal */}
+      {isEditModalOpen && editingAgent && (
+        <div style={{
+          position: "fixed",
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: "rgba(0, 0, 0, 0.5)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          zIndex: 1000
+        }}>
+          <div style={{
+            backgroundColor: "#fff",
+            borderRadius: "8px",
+            padding: "32px",
+            maxWidth: "500px",
+            width: "90%",
+            maxHeight: "90vh",
+            overflow: "auto"
+          }}>
+            <h2 style={{
+              fontSize: "24px",
+              fontWeight: "600",
+              marginBottom: "8px",
+              color: "#333"
+            }}>
+              ✏️ Edit Agent
+            </h2>
+            
+            <p style={{
+              fontSize: "16px",
+              color: "#6c757d",
+              marginBottom: "24px",
+              lineHeight: "1.5"
+            }}>
+              Update the name and description for "{editingAgent.name}". Core functionality like recording and login cannot be changed here.
+            </p>
+
+            <form onSubmit={handleUpdateAgent}>
+              <div style={{ marginBottom: "20px" }}>
+                <label style={{
+                  display: "block",
+                  fontSize: "14px",
+                  fontWeight: "500",
+                  color: "#495057",
+                  marginBottom: "8px"
+                }}>
+                  Agent Name *
+                </label>
+                <input
+                  type="text"
+                  value={editFormData.name}
+                  onChange={(e) => setEditFormData({ ...editFormData, name: e.target.value })}
+                  style={{
+                    width: "100%",
+                    padding: "12px 16px",
+                    border: "1px solid #ced4da",
+                    borderRadius: "6px",
+                    fontSize: "16px",
+                    boxSizing: "border-box"
+                  }}
+                  required
+                />
+              </div>
+
+              <div style={{ marginBottom: "24px" }}>
+                <label style={{
+                  display: "block",
+                  fontSize: "14px",
+                  fontWeight: "500",
+                  color: "#495057",
+                  marginBottom: "8px"
+                }}>
+                  Description (Optional)
+                </label>
+                <textarea
+                  value={editFormData.description}
+                  onChange={(e) => setEditFormData({ ...editFormData, description: e.target.value })}
+                  rows={4}
+                  style={{
+                    width: "100%",
+                    padding: "12px 16px",
+                    border: "1px solid #ced4da",
+                    borderRadius: "6px",
+                    fontSize: "16px",
+                    boxSizing: "border-box",
+                    resize: "vertical",
+                    fontFamily: "inherit"
+                  }}
+                />
+              </div>
+
+              <div style={{
+                display: "flex",
+                justifyContent: "flex-end",
+                gap: "12px"
+              }}>
+                <button
+                  type="button"
+                  onClick={() => setIsEditModalOpen(false)}
+                  style={{
+                    background: "#6c757d",
+                    color: "#fff",
+                    border: "none",
+                    padding: "12px 24px",
+                    borderRadius: "6px",
+                    fontSize: "14px",
+                    fontWeight: "500",
+                    cursor: "pointer",
+                    transition: "background-color 0.2s ease"
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isUpdating || !editFormData.name.trim()}
+                  style={{
+                    background: isUpdating || !editFormData.name.trim() ? "#6c757d" : "#007bff",
+                    color: "#fff",
+                    border: "none",
+                    padding: "12px 24px",
+                    borderRadius: "6px",
+                    fontSize: "14px",
+                    fontWeight: "500",
+                    cursor: isUpdating || !editFormData.name.trim() ? "not-allowed" : "pointer",
+                    transition: "background-color 0.2s ease"
+                  }}
+                >
+                  {isUpdating ? "Updating..." : "Update Agent"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {isDeleteModalOpen && deletingAgent && (
+        <div style={{
+          position: "fixed",
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: "rgba(0, 0, 0, 0.5)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          zIndex: 1000
+        }}>
+          <div style={{
+            backgroundColor: "#fff",
+            borderRadius: "8px",
+            padding: "32px",
+            maxWidth: "400px",
+            width: "90%"
+          }}>
+            <h2 style={{
+              fontSize: "24px",
+              fontWeight: "600",
+              marginBottom: "8px",
+              color: "#dc3545"
+            }}>
+              ⚠️ Delete Agent
+            </h2>
+            
+            <p style={{
+              fontSize: "16px",
+              color: "#6c757d",
+              marginBottom: "24px",
+              lineHeight: "1.5"
+            }}>
+              Are you sure you want to delete the agent <strong>"{deletingAgent.name}"</strong>? This action cannot be undone and will permanently remove the agent and all its associated data.
+            </p>
+
+            <div style={{
+              display: "flex",
+              justifyContent: "flex-end",
+              gap: "12px"
+            }}>
+              <button
+                type="button"
+                onClick={() => setIsDeleteModalOpen(false)}
+                style={{
+                  background: "#6c757d",
+                  color: "#fff",
+                  border: "none",
+                  padding: "12px 24px",
+                  borderRadius: "6px",
+                  fontSize: "14px",
+                  fontWeight: "500",
+                  cursor: "pointer",
+                  transition: "background-color 0.2s ease"
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmDeleteAgent}
+                disabled={isDeleting}
+                style={{
+                  background: isDeleting ? "#6c757d" : "#dc3545",
+                  color: "#fff",
+                  border: "none",
+                  padding: "12px 24px",
+                  borderRadius: "6px",
+                  fontSize: "14px",
+                  fontWeight: "500",
+                  cursor: isDeleting ? "not-allowed" : "pointer",
+                  transition: "background-color 0.2s ease"
+                }}
+              >
+                {isDeleting ? "Deleting..." : "Delete Agent"}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

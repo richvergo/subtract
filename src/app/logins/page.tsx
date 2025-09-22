@@ -49,12 +49,7 @@ export default function LoginsPage() {
   const [isTesting, setIsTesting] = useState(false);
   const [testResult, setTestResult] = useState<{ success: boolean; status?: string; errorMessage?: string; responseTime?: number; lastChecked?: string } | null>(null);
   const [modalError, setModalError] = useState<string | null>(null);
-  const [wizardStep, setWizardStep] = useState(1); // 1: Credentials, 2: Recording, 3: Save
-  const [isRecording, setIsRecording] = useState(false);
-  const [hasRecording, setHasRecording] = useState(false);
-  const [recordingBlob, setRecordingBlob] = useState<Blob | null>(null);
-  const [recordingError, setRecordingError] = useState<string | null>(null);
-  const [analysisStatus, setAnalysisStatus] = useState<'idle' | 'analyzing' | 'completed' | 'failed'>('idle');
+  const [wizardStep, setWizardStep] = useState(1); // 1: Credentials, 2: Save
   const [createdLoginId, setCreatedLoginId] = useState<string | null>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editingLogin, setEditingLogin] = useState<{ id: string; name: string; username: string } | null>(null);
@@ -63,12 +58,14 @@ export default function LoginsPage() {
     password: ''
   });
   const [isLoadingCredentials, setIsLoadingCredentials] = useState(false);
+  const [hasRecording, setHasRecording] = useState(false);
+  const [recordingBlob, setRecordingBlob] = useState<Blob | null>(null);
+  const [recordingError, setRecordingError] = useState<string | null>(null);
+  const [isRecording, setIsRecording] = useState(false);
+  const [analysisStatus, setAnalysisStatus] = useState<'idle' | 'analyzing' | 'complete' | 'error'>('idle');
   const submissionInProgress = useRef(false);
   const lastSubmissionTime = useRef(0);
   const requestId = useRef(0);
-  const streamRef = useRef<MediaStream | null>(null);
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const chunksRef = useRef<Blob[]>([]);
   const [formData, setFormData] = useState({
     name: '',
     loginUrl: '',
@@ -130,7 +127,6 @@ export default function LoginsPage() {
     console.log('🚀 handleCreateLogin called', { 
       submissionInProgress: submissionInProgress.current, 
       isSubmitting, 
-      analysisStatus,
       timestamp: Date.now()
     });
     
@@ -139,11 +135,10 @@ export default function LoginsPage() {
     
     // Prevent double submission using ref and timestamp for more reliable tracking
     const now = Date.now();
-    if (submissionInProgress.current || isSubmitting || analysisStatus === 'analyzing' || (now - lastSubmissionTime.current) < 5000) {
-      console.log('❌ Form already submitting or analyzing, ignoring duplicate submission', {
+    if (submissionInProgress.current || isSubmitting || (now - lastSubmissionTime.current) < 5000) {
+      console.log('❌ Form already submitting, ignoring duplicate submission', {
         submissionInProgress: submissionInProgress.current,
         isSubmitting,
-        analysisStatus,
         timeSinceLastSubmission: now - lastSubmissionTime.current
       });
       return;
@@ -163,7 +158,6 @@ export default function LoginsPage() {
     }
 
     setIsSubmitting(true);
-    setAnalysisStatus('analyzing');
     setTestResult(null);
     setModalError(null);
 
@@ -176,14 +170,6 @@ export default function LoginsPage() {
       formDataToSend.append('password', formData.password);
       formDataToSend.append('testOnCreate', 'false'); // Don't test immediately
       formDataToSend.append('requestId', currentRequestId.toString());
-      
-      // Add recording if available
-      if (recordingBlob) {
-        console.log('Adding recording to FormData:', { size: recordingBlob.size, type: recordingBlob.type });
-        formDataToSend.append('recording', recordingBlob, 'login-recording.webm');
-      } else {
-        console.log('No recording blob available');
-      }
 
       console.log('Sending FormData to /api/logins...');
       const response = await fetch('/api/logins', {
@@ -218,10 +204,14 @@ export default function LoginsPage() {
       
       setCreatedLoginId(result.login?.id);
       
-      // Start polling for analysis completion
-      if (result.login?.id) {
-        pollAnalysisStatus(result.login.id);
-      }
+      // Close modal and refresh after a short delay
+      setTimeout(() => {
+        setIsModalOpen(false);
+        setFormData({ name: '', loginUrl: '', username: '', password: '' });
+        setTestResult(null);
+        setCreatedLoginId(null);
+        mutate();
+      }, 1000);
       
     } catch (error) {
       console.error('Error creating login:', error);
@@ -233,7 +223,6 @@ export default function LoginsPage() {
       }
       
       setModalError(error instanceof Error ? error.message : 'Failed to create login');
-      setAnalysisStatus('failed');
     } finally {
       // Only reset if this is still the latest request
       if (currentRequestId === requestId.current) {
@@ -243,65 +232,6 @@ export default function LoginsPage() {
     }
   };
 
-  const pollAnalysisStatus = async (loginId: string) => {
-    let attempts = 0;
-    const maxAttempts = 60; // Poll for up to 60 seconds
-    
-    const poll = async () => {
-      attempts++;
-      
-      try {
-        const response = await fetch(`/api/logins/${loginId}/status`, {
-          credentials: 'include'
-        });
-        
-        if (response.ok) {
-          const result = await response.json();
-          
-          if (result.analysisStatus === 'COMPLETED') {
-            setAnalysisStatus('completed');
-            setTestResult({ success: true, status: 'NEEDS_TESTING' });
-            
-            // Close modal and refresh after a short delay
-            setTimeout(() => {
-              setIsModalOpen(false);
-              setFormData({ name: '', loginUrl: '', username: '', password: '' });
-              setTestResult(null);
-              setHasRecording(false);
-              setRecordingBlob(null);
-              setAnalysisStatus('idle');
-              setCreatedLoginId(null);
-              mutate();
-            }, 2000);
-            
-            return;
-          } else if (result.analysisStatus === 'FAILED') {
-            setAnalysisStatus('failed');
-            setTestResult({ success: false, errorMessage: 'Analysis failed' });
-            return;
-          }
-        }
-        
-        if (attempts < maxAttempts) {
-          setTimeout(poll, 1000); // Poll every second
-        } else {
-          setAnalysisStatus('failed');
-          setTestResult({ success: false, errorMessage: 'Analysis timed out' });
-        }
-      } catch (error) {
-        console.error('Error polling analysis status:', error);
-        if (attempts < maxAttempts) {
-          setTimeout(poll, 1000);
-        } else {
-          setAnalysisStatus('failed');
-          setTestResult({ success: false, errorMessage: 'Analysis failed' });
-        }
-      }
-    };
-    
-    // Start polling after a short delay
-    setTimeout(poll, 2000);
-  };
 
   const handleTestLogin = async (loginId: string, loginName: string) => {
     try {
@@ -350,6 +280,9 @@ export default function LoginsPage() {
       
       if (testResult.success) {
         alert(`✅ ${loginName} login test successful!\n\nBrowser will close automatically. Status updated to Ready for Agents.`);
+        mutate(); // Refresh the login list
+      } else if (testResult.requiresManualTesting) {
+        alert(`🔑 ${loginName} uses OAuth authentication\n\nThis login requires manual testing because it uses OAuth (like "Sign in with Google" or "Sign in with Microsoft").\n\nTo test this login:\n1. Click the "Test Login" button\n2. Complete the OAuth flow manually in the browser\n3. The system will capture your session once you're logged in`);
         mutate(); // Refresh the login list
       } else {
         alert(`❌ ${loginName} login test failed: ${testResult.message}\n\nPlease check your credentials and try again.`);
@@ -541,66 +474,6 @@ export default function LoginsPage() {
   };
 
 
-  // Screen recording functions (from agent creation)
-  const startRecording = async () => {
-    try {
-      setRecordingError("");
-      const stream = await navigator.mediaDevices.getDisplayMedia({ 
-        video: true,
-        audio: true 
-      });
-      
-      streamRef.current = stream;
-      
-      // Set up MediaRecorder
-      const mediaRecorder = new MediaRecorder(stream, {
-        mimeType: 'video/webm;codecs=vp9'
-      });
-      
-      mediaRecorderRef.current = mediaRecorder;
-      chunksRef.current = [];
-      
-      mediaRecorder.ondataavailable = (event) => {
-        if (event.data.size > 0) {
-          chunksRef.current.push(event.data);
-        }
-      };
-      
-      mediaRecorder.onstop = () => {
-        const blob = new Blob(chunksRef.current, { type: 'video/webm' });
-        
-        // Validate file size (100MB limit)
-        const maxSize = 100 * 1024 * 1024; // 100MB
-        if (blob.size > maxSize) {
-          setRecordingError(`Recording too large (${Math.round(blob.size / (1024 * 1024))}MB). Maximum size is 100MB. Please record a shorter video.`);
-          setHasRecording(false);
-          setRecordingBlob(null);
-        } else {
-          setRecordingBlob(blob);
-          setHasRecording(true);
-        }
-        
-        // Stop all tracks
-        if (streamRef.current) {
-          streamRef.current.getTracks().forEach(track => track.stop());
-        }
-      };
-      
-      mediaRecorder.start();
-      setIsRecording(true);
-      
-    } catch (err) {
-      console.error('Error starting recording:', err);
-      setRecordingError("Failed to start recording. Please ensure you grant screen sharing permissions.");
-    }
-  };
-
-  const stopRecording = () => {
-    if (mediaRecorderRef.current && isRecording) {
-      mediaRecorderRef.current.stop();
-      setIsRecording(false);
-    }
-  };
 
 
   // Show loading while checking authentication
@@ -1041,21 +914,6 @@ export default function LoginsPage() {
                   fontWeight: "500"
                 }}>
                   <span>2</span>
-                  <span>Recording</span>
-                </div>
-                <div style={{ width: "20px", height: "2px", backgroundColor: wizardStep >= 3 ? "#007bff" : "#e9ecef" }}></div>
-                <div style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "4px",
-                  padding: "6px 12px",
-                  borderRadius: "20px",
-                  backgroundColor: wizardStep >= 3 ? "#007bff" : "#e9ecef",
-                  color: wizardStep >= 3 ? "white" : "#6c757d",
-                  fontSize: "12px",
-                  fontWeight: "500"
-                }}>
-                  <span>3</span>
                   <span>Save</span>
                 </div>
               </div>
@@ -1303,169 +1161,29 @@ export default function LoginsPage() {
                     transition: "background-color 0.2s ease"
                   }}
                 >
-                  Next: Record Login →
+                  Next: Save Login →
                 </button>
               </div>
             </form>
               </div>
             )}
 
-            {/* Step 2: Recording */}
+
+            {/* Step 2: Save */}
             {wizardStep === 2 && (
               <div>
                 <div style={{
-                  backgroundColor: "#fff3cd",
-                  color: "#856404",
+                  backgroundColor: "#d1ecf1",
+                  color: "#0c5460",
                   padding: "12px 16px",
                   borderRadius: "6px",
                   marginBottom: "20px",
                   fontSize: "14px",
-                  border: "1px solid #ffeaa7"
+                  border: "1px solid #bee5eb"
                 }}>
-                  🎥 <strong>Step 2:</strong> Record yourself logging in. This helps us understand the login process and identify the buttons/fields to click.
-                </div>
-                
-                {/* Recording Controls */}
-                <div style={{ marginBottom: "20px" }}>
-                  {!hasRecording && !isRecording && (
-                    <div style={{
-                      textAlign: "center",
-                      padding: "40px 20px",
-                      backgroundColor: "#f8f9fa",
-                      borderRadius: "8px",
-                      border: "2px dashed #dee2e6"
-                    }}>
-                      <div style={{ fontSize: "48px", marginBottom: "16px", color: "#6c757d" }}>
-                        🎥
-                      </div>
-                      <h3 style={{ margin: "0 0 8px 0", fontSize: "18px", color: "#495057" }}>
-                        Record Your Login Process
-                      </h3>
-                      <p style={{ margin: "0 0 20px 0", color: "#6c757d", fontSize: "14px" }}>
-                        Click the button below to start recording your screen while you log in
-                      </p>
-                      <button
-                        onClick={startRecording}
-                        style={{
-                          padding: "12px 24px",
-                          backgroundColor: "#dc3545",
-                          color: "#fff",
-                          border: "none",
-                          borderRadius: "6px",
-                          fontSize: "16px",
-                          fontWeight: "500",
-                          cursor: "pointer",
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "8px",
-                          margin: "0 auto"
-                        }}
-                      >
-                        🔴 Start Recording
-                      </button>
-                    </div>
-                  )}
-
-                  {isRecording && (
-                    <div style={{
-                      textAlign: "center",
-                      padding: "40px 20px",
-                      backgroundColor: "#f8d7da",
-                      borderRadius: "8px",
-                      border: "2px solid #f5c6cb"
-                    }}>
-                      <div style={{ fontSize: "48px", marginBottom: "16px", color: "#dc3545" }}>
-                        🔴
-                      </div>
-                      <h3 style={{ margin: "0 0 8px 0", fontSize: "18px", color: "#721c24" }}>
-                        Recording in Progress...
-                      </h3>
-                      <p style={{ margin: "0 0 20px 0", color: "#721c24", fontSize: "14px" }}>
-                        Go to your login page and perform the login process
-                      </p>
-                      <button
-                        onClick={stopRecording}
-                        style={{
-                          padding: "12px 24px",
-                          backgroundColor: "#6c757d",
-                          color: "#fff",
-                          border: "none",
-                          borderRadius: "6px",
-                          fontSize: "16px",
-                          fontWeight: "500",
-                          cursor: "pointer"
-                        }}
-                      >
-                        ⏹️ Stop Recording
-                      </button>
-                    </div>
-                  )}
-
-                  {hasRecording && !isRecording && (
-                    <div style={{
-                      textAlign: "center",
-                      padding: "40px 20px",
-                      backgroundColor: "#d4edda",
-                      borderRadius: "8px",
-                      border: "2px solid #c3e6cb"
-                    }}>
-                      <div style={{ fontSize: "48px", marginBottom: "16px", color: "#155724" }}>
-                        ✅
-                      </div>
-                      <h3 style={{ margin: "0 0 8px 0", fontSize: "18px", color: "#155724" }}>
-                        Recording Complete!
-                      </h3>
-                      <p style={{ margin: "0 0 20px 0", color: "#155724", fontSize: "14px" }}>
-                        Your login process has been recorded successfully
-                      </p>
-                      <div style={{ display: "flex", gap: "12px", justifyContent: "center" }}>
-                        <button
-                          onClick={startRecording}
-                          style={{
-                            padding: "8px 16px",
-                            backgroundColor: "#007bff",
-                            color: "#fff",
-                            border: "none",
-                            borderRadius: "4px",
-                            fontSize: "14px",
-                            cursor: "pointer"
-                          }}
-                        >
-                          🔄 Record Again
-                        </button>
-                      </div>
-                    </div>
-                  )}
-
-                  {recordingError && (
-                    <div style={{
-                      marginTop: "12px",
-                      padding: "12px",
-                      backgroundColor: "#f8d7da",
-                      color: "#721c24",
-                      borderRadius: "6px",
-                      border: "1px solid #f5c6cb",
-                      fontSize: "14px"
-                    }}>
-                      ❌ {recordingError}
-                    </div>
-                  )}
+                  💾 <strong>Step 2:</strong> Save your login configuration. We&apos;ll create a login agent and set the status to "Needs Testing".
                 </div>
 
-                <div style={{
-                  backgroundColor: "#f8f9fa",
-                  padding: "16px",
-                  borderRadius: "6px",
-                  marginBottom: "20px"
-                }}>
-                  <h4 style={{ margin: "0 0 8px 0", fontSize: "14px", color: "#495057" }}>Recording Tips:</h4>
-                  <ul style={{ margin: 0, paddingLeft: "20px", fontSize: "13px", color: "#6c757d" }}>
-                    <li>Start recording before opening the login page</li>
-                    <li>Show the full login process including clicking buttons</li>
-                    <li>Make sure all text is clearly visible</li>
-                    <li>Keep the recording under 2 minutes if possible</li>
-                  </ul>
-                </div>
 
                 <div style={{
                   display: "flex",
@@ -1491,139 +1209,22 @@ export default function LoginsPage() {
                   </button>
                   <button
                     type="button"
-                    onClick={nextStep}
-                    disabled={!hasRecording}
-                    style={{
-                      padding: "12px 24px",
-                      border: "none",
-                      borderRadius: "6px",
-                      background: hasRecording ? "#007bff" : "#6c757d",
-                      color: "#fff",
-                      fontSize: "14px",
-                      fontWeight: "500",
-                      cursor: hasRecording ? "pointer" : "not-allowed"
-                    }}
-                  >
-                    Next: Save Login →
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* Step 3: Save */}
-            {wizardStep === 3 && (
-              <div>
-                <div style={{
-                  backgroundColor: "#d1ecf1",
-                  color: "#0c5460",
-                  padding: "12px 16px",
-                  borderRadius: "6px",
-                  marginBottom: "20px",
-                  fontSize: "14px",
-                  border: "1px solid #bee5eb"
-                }}>
-                  💾 <strong>Step 3:</strong> Save your login configuration. We&apos;ll analyze your recording to create a login agent and set the status to "Needs Testing".
-                </div>
-
-                {/* Analysis Status */}
-                {analysisStatus === 'analyzing' && (
-                  <div style={{
-                    backgroundColor: "#fff3cd",
-                    color: "#856404",
-                    padding: "12px 16px",
-                    borderRadius: "6px",
-                    marginBottom: "20px",
-                    fontSize: "14px",
-                    border: "1px solid #ffeaa7",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "8px"
-                  }}>
-                    <div style={{
-                      width: "16px",
-                      height: "16px",
-                      border: "2px solid #856404",
-                      borderTop: "2px solid transparent",
-                      borderRadius: "50%",
-                      animation: "spin 1s linear infinite"
-                    }}></div>
-                    🤖 Analyzing your recording and creating login agent...
-                  </div>
-                )}
-
-                {analysisStatus === 'completed' && (
-                  <div style={{
-                    backgroundColor: "#d4edda",
-                    color: "#155724",
-                    padding: "12px 16px",
-                    borderRadius: "6px",
-                    marginBottom: "20px",
-                    fontSize: "14px",
-                    border: "1px solid #c3e6cb"
-                  }}>
-                    ✅ <strong>Login Saved!</strong> Your login has been created with status "Needs Testing". You can now test it from the main page.
-                  </div>
-                )}
-
-                {analysisStatus === 'failed' && (
-                  <div style={{
-                    backgroundColor: "#f8d7da",
-                    color: "#721c24",
-                    padding: "12px 16px",
-                    borderRadius: "6px",
-                    marginBottom: "20px",
-                    fontSize: "14px",
-                    border: "1px solid #f5c6cb"
-                  }}>
-                    ❌ <strong>Analysis Failed:</strong> {testResult?.errorMessage || 'Unable to analyze the recording.'}
-                  </div>
-                )}
-
-                <div style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  gap: "12px",
-                  marginTop: "24px"
-                }}>
-                  <button
-                    type="button"
-                    onClick={prevStep}
-                    disabled={analysisStatus === 'analyzing'}
-                    style={{
-                      padding: "12px 24px",
-                      border: "1px solid #dee2e6",
-                      borderRadius: "6px",
-                      background: "#fff",
-                      color: "#495057",
-                      fontSize: "14px",
-                      fontWeight: "500",
-                      cursor: analysisStatus === 'analyzing' ? "not-allowed" : "pointer",
-                      opacity: analysisStatus === 'analyzing' ? 0.6 : 1
-                    }}
-                  >
-                    ← Back
-                  </button>
-                  <button
-                    type="button"
                     onClick={handleCreateLogin}
-                    disabled={submissionInProgress.current || isSubmitting || analysisStatus === 'analyzing'}
+                    disabled={submissionInProgress.current || isSubmitting}
                     style={{
                       padding: "12px 24px",
                       border: "none",
                       borderRadius: "6px",
-                      background: submissionInProgress.current || isSubmitting || analysisStatus === 'analyzing' ? "#6c757d" : "#28a745",
+                      background: submissionInProgress.current || isSubmitting ? "#6c757d" : "#28a745",
                       color: "#fff",
                       fontSize: "14px",
                       fontWeight: "500",
-                      cursor: submissionInProgress.current || isSubmitting || analysisStatus === 'analyzing' ? "not-allowed" : "pointer",
+                      cursor: submissionInProgress.current || isSubmitting ? "not-allowed" : "pointer",
                       transition: "background-color 0.2s ease",
-                      opacity: submissionInProgress.current || isSubmitting || analysisStatus === 'analyzing' ? 0.6 : 1
+                      opacity: submissionInProgress.current || isSubmitting ? 0.6 : 1
                     }}
                   >
-                    {analysisStatus === 'analyzing' ? "🤖 Analyzing..." : 
-                     analysisStatus === 'completed' ? "✅ Saved" :
-                     analysisStatus === 'failed' ? "❌ Failed" :
-                     "Save Login Configuration"}
+                    {isSubmitting ? "💾 Saving..." : "Save Login Configuration"}
                   </button>
                 </div>
               </div>
