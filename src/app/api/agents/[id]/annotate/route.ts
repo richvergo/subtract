@@ -61,9 +61,7 @@ export async function POST(
     let agentIntents;
     try {
       agentIntents = await llmService.annotateWorkflow(
-        validatedData.recordedSteps,
-        validatedData.purposePrompt,
-        agent.description || undefined
+        validatedData.recordedSteps
       );
     } catch (error) {
       console.error('LLM annotation failed:', error);

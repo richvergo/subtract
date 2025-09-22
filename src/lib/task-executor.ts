@@ -8,6 +8,7 @@ import { createTaskExecutionContext, TaskParameters } from './parameter-substitu
 // import { substituteAgentConfig } from './parameter-substitution';
 // import { SessionManager } from './session-manager';
 import { decryptLoginCredentials } from './encryption';
+// Enhanced functionality available but not used in legacy executor
 import puppeteer, { Browser, Page } from 'puppeteer';
 
 export interface TaskExecutionResult {

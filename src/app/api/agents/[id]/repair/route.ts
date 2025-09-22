@@ -85,8 +85,7 @@ export async function POST(
       repairResult = await llmService.repairSelector(
         validatedData.failedSelector,
         validatedData.intent,
-        validatedData.domSnapshot,
-        failedStep.action
+        validatedData.domSnapshot
       );
     } catch (error) {
       console.error('LLM repair failed:', error);

@@ -68,7 +68,7 @@ export async function POST(
       // Generate clean summary using LLM
       const summary = await llmService.summarizeWorkflow(
         recordedSteps,
-        agent.transcript || undefined
+        agent.transcript ? [agent.transcript] : []
       );
 
       // Update agent with summary

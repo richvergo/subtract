@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-config';
 import { db } from '@/lib/db';
-import { AgentExecutor } from '@/lib/agent-executor';
+import { executeAgentRun } from '@/lib/agent-executor';
 import { getUserEmailForQuery } from '@/lib/auth';
 
 /**
@@ -82,26 +82,8 @@ export async function POST(
       // Get the associated login
       const login = agent.agentLogins[0].login;
       
-      // Create execution context
-      const context = {
-        agentId: agent.id,
-        runId: 'test-run-' + Date.now(),
-        agentConfig: agentConfig,
-        agentIntents: [],
-        logins: [{
-          id: login.id,
-          name: login.name,
-          loginUrl: login.loginUrl,
-          username: login.username,
-          password: login.password || undefined
-        }]
-      };
-      
-      // Create executor instance
-      const executor = new AgentExecutor(context);
-      
-      // Execute the workflow
-      const result = await executor.execute();
+      // Execute the workflow using simple executor
+      const result = await executeAgentRun(agent.id, 'test-run-' + Date.now());
 
       console.log(`✅ Workflow test complete for: ${agent.name}`);
 

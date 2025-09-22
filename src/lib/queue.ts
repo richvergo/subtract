@@ -101,8 +101,7 @@ async function processAgentRecording(job: ProcessingJob) {
 
     // Step 2: Generate intent annotations using LLM
     const agentIntents = await llmService.annotateWorkflow(
-      agentConfig as AgentConfig,
-      purposePrompt
+      agentConfig as AgentConfig
     );
 
     // Step 3: Merge LLM intents into agent config metadata

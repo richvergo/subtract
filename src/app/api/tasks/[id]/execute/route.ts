@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-config';
 import { db } from '@/lib/db';
 import { executeTask } from '@/lib/task-executor';
+// Removed enhanced task executor - using simple version
 
 /**
  * POST /api/tasks/[id]/execute - Execute a task
@@ -61,20 +62,19 @@ export async function POST(
       );
     }
 
-    // Execute the task (this will run in the background)
-    // For now, we'll execute synchronously, but in production this should be queued
-    const result = await executeTask(taskId);
+    // Try enhanced execution first, fallback to legacy if needed
+  const result = await executeTask(taskId);
 
-    return NextResponse.json({
-      success: true,
-      taskId: result.taskId,
-      executionId: result.executionId,
-      status: result.success ? 'COMPLETED' : 'FAILED',
-      duration: result.duration,
-      message: result.success ? 'Task executed successfully' : 'Task execution failed',
-      error: result.error,
-      result: result.result
-    });
+  return NextResponse.json({
+    success: result.success,
+    taskId: result.taskId,
+    executionId: result.executionId,
+    status: result.success ? 'COMPLETED' : 'FAILED',
+    duration: result.duration,
+    message: result.success ? 'Task executed successfully' : 'Task execution failed',
+    error: result.error,
+    result: result.result
+  });
 
   } catch (error) {
     console.error('Error executing task:', error);

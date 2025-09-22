@@ -71,17 +71,18 @@ export async function POST(
       },
     });
 
-    // Enqueue the job to Redis queue
+    // Enqueue the job to enhanced queue
     try {
       const job = await enqueueAgentRun(agent.id);
 
-      console.log(`[API] Enqueued agent run: ${agentRun.id} for agent: ${agent.id}`);
+      console.log(`[API] Enqueued enhanced agent run: ${agentRun.id} for agent: ${agent.id}`);
 
       return NextResponse.json({
-        message: 'Agent run enqueued successfully',
+        message: 'Enhanced agent run enqueued successfully',
         runId: agentRun.id,
         status: 'enqueued',
         jobId: job.id,
+        enhancedExecution: true
       }, { status: 202 });
     } catch (error) {
       console.error('Failed to enqueue agent run:', error);

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
+// import Link from "next/link"; // Unused for now
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -33,7 +33,7 @@ export default function LoginPage() {
         // Redirect to tasks page
         router.push("/tasks");
       }
-    } catch (error) {
+    } catch {
       setMessage("❌ Login failed. Please try again.");
     }
     setLoading(false);
@@ -59,7 +59,7 @@ export default function LoginPage() {
         const data = await res.json();
         setMessage("❌ Error: " + (data.error || "Something went wrong"));
       }
-    } catch (error) {
+    } catch {
       setMessage("❌ Registration failed. Please try again.");
     }
     setLoading(false);

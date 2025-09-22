@@ -197,7 +197,7 @@ export async function POST(request: NextRequest) {
       console.log('Triggering login analysis...');
       try {
         // Call the analysis endpoint
-        const analysisResponse = await fetch(`${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api/logins/${login.id}/analyze`, {
+        const analysisResponse = await fetch(`${process.env.NEXTAUTH_URL || 'http://localhost:3001'}/api/logins/${login.id}/analyze`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',

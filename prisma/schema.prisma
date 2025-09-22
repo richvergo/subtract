@@ -38,28 +38,29 @@ model Membership {
 }
 
 model Login {
-  id            String       @id @default(cuid())
-  name          String
-  loginUrl      String
-  username      String
-  password      String?
-  oauthToken    String?
-  status        LoginStatus  @default(UNKNOWN)
-  lastCheckedAt DateTime?
-  lastSuccessAt DateTime?
-  lastFailureAt DateTime?
-  failureCount  Int          @default(0)
-  errorMessage  String?
-  ownerId       String
-  createdAt     DateTime     @default(now())
-  updatedAt     DateTime     @updatedAt
-  customConfig  String?
-  templateId    String?
-  sessionData   String?
-  sessionExpiry DateTime?
-  recordingUrl  String?
-  agentLogins   AgentLogin[]
-  owner         User         @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  id             String       @id @default(cuid())
+  name           String
+  loginUrl       String
+  username       String
+  password       String?
+  oauthToken     String?
+  status         LoginStatus  @default(UNKNOWN)
+  lastCheckedAt  DateTime?
+  lastSuccessAt  DateTime?
+  lastFailureAt  DateTime?
+  failureCount   Int          @default(0)
+  errorMessage   String?
+  ownerId        String
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  customConfig   String?
+  templateId     String?
+  sessionData    String?
+  sessionExpiry  DateTime?
+  recordingUrl   String?
+  analysisStatus String?      @default("pending") // pending, processing, completed, failed
+  agentLogins    AgentLogin[]
+  owner          User         @relation(fields: [ownerId], references: [id], onDelete: Cascade)
 }
 
 model Agent {
@@ -203,4 +204,23 @@ enum TaskStatus {
   COMPLETED
   FAILED
   CANCELLED
+}
+
+model ExecutionMetrics {
+  id              String   @id @default(cuid())
+  agentId         String
+  taskId          String
+  startTime       DateTime
+  endTime         DateTime
+  duration        Int      // in milliseconds
+  totalSteps      Int
+  successfulSteps Int
+  failedSteps     Int
+  retryAttempts   Int
+  errors          String?  // JSON array of error messages
+  screenshots     String?  // JSON array of screenshot paths
+  repairs         String?  // JSON array of repair attempts
+  successRate     Float
+  performanceScore Float
+  createdAt       DateTime @default(now())
 }
