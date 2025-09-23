@@ -3,7 +3,7 @@
  */
 
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { ActionCapturer, RecordedAction, RecordingSession } from '../action-capturer';
+import { RecordedAction, RecordingSession, enhancedRecorderFixed } from '../enhanced-recorder-fixed';
 
 export interface UseActionCaptureReturn {
   isCapturing: boolean;
@@ -13,41 +13,30 @@ export interface UseActionCaptureReturn {
   startCapture: () => void;
   stopCapture: () => RecordedAction[];
   clearActions: () => void;
-  getActionsByType: (type: RecordedAction['action']) => RecordedAction[];
+  getActionsByType: (type: RecordedAction['type']) => RecordedAction[];
 }
 
 export function useActionCapture(): UseActionCaptureReturn {
   const [isCapturing, setIsCapturing] = useState(false);
   const [actions, setActions] = useState<RecordedAction[]>([]);
   const [session, setSession] = useState<RecordingSession | null>(null);
-  const capturerRef = useRef<ActionCapturer | null>(null);
-
-  // Initialize capturer
-  useEffect(() => {
-    capturerRef.current = new ActionCapturer();
-    return () => {
-      if (capturerRef.current) {
-        capturerRef.current.stopCapture();
-      }
-    };
-  }, []);
 
   const startCapture = useCallback(() => {
-    if (!capturerRef.current || isCapturing) return;
+    if (isCapturing) return;
 
     console.log('🎬 Starting action capture...');
-    capturerRef.current.startCapture();
+    const session = enhancedRecorderFixed.startRecording();
     setIsCapturing(true);
     setActions([]);
-    setSession(null);
+    setSession(session);
   }, [isCapturing]);
 
   const stopCapture = useCallback((): RecordedAction[] => {
-    if (!capturerRef.current || !isCapturing) return [];
+    if (!isCapturing) return [];
 
     console.log('🛑 Stopping action capture...');
-    const capturedActions = capturerRef.current.stopCapture();
-    const sessionData = capturerRef.current.getSession();
+    const sessionData = enhancedRecorderFixed.stopRecording();
+    const capturedActions = sessionData?.actions || [];
     
     setActions(capturedActions);
     setSession(sessionData);
@@ -58,25 +47,24 @@ export function useActionCapture(): UseActionCaptureReturn {
   }, [isCapturing]);
 
   const clearActions = useCallback(() => {
-    if (capturerRef.current) {
-      capturerRef.current.clearActions();
-    }
+    // Reset the recorder state
+    enhancedRecorderFixed.stopRecording();
     setActions([]);
     setSession(null);
   }, []);
 
-  const getActionsByType = useCallback((type: RecordedAction['action']): RecordedAction[] => {
-    return actions.filter(action => action.action === type);
+  const getActionsByType = useCallback((type: RecordedAction['type']): RecordedAction[] => {
+    return actions.filter(action => action.type === type);
   }, [actions]);
 
   // Update actions count periodically when capturing
   useEffect(() => {
-    if (!isCapturing || !capturerRef.current) return;
+    if (!isCapturing) return;
 
     const interval = setInterval(() => {
-      if (capturerRef.current) {
-        const currentActions = capturerRef.current.getSession().actions;
-        setActions(currentActions);
+      const session = enhancedRecorderFixed.getSession();
+      if (session) {
+        setActions(session.actions);
       }
     }, 1000); // Update every second
 

@@ -154,7 +154,7 @@ export class AdvancedDOMObserver {
       },
       timestamp,
       context: {
-        parentSelector: this.generateRobustSelector(element.parentElement),
+        parentSelector: element.parentElement ? this.generateRobustSelector(element.parentElement) : '',
         siblingSelectors: this.getSiblingSelectors(element),
         pageUrl: window.location.href,
         viewport: {

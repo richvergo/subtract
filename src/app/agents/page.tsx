@@ -335,7 +335,7 @@ export default function AgentsPage() {
         }}>
           Agents
         </h1>
-        <Link href="/agents/create-simple">
+        <Link href="/agents/create">
           <button style={{
             background: "#007bff", 
             color: "#fff",
@@ -386,7 +386,7 @@ export default function AgentsPage() {
           }}>
             Click Create Agent to add your first one.
           </p>
-          <Link href="/agents/create-simple">
+          <Link href="/agents/create">
             <button style={{
               background: "#007bff", 
               color: "#fff",

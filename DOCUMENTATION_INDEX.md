@@ -20,7 +20,8 @@ This is your starting point for understanding and contributing to the vergo auto
 ### 🏗️ Architecture & Design
 | Document | Purpose | Audience |
 |----------|---------|----------|
-| [ARCHITECTURE.md](./ARCHITECTURE.md) | System design and technical decisions | Developers, Architects |
+| [STREAMLINED_ARCHITECTURE.md](./STREAMLINED_ARCHITECTURE.md) | **NEW** - Streamlined system design and product direction | Developers, Architects |
+| [ARCHITECTURE.md](./ARCHITECTURE.md) | Legacy system design (for reference) | Developers, Architects |
 | [README.md](./README.md) | Project overview and setup | Everyone |
 
 ### 💻 Development Standards

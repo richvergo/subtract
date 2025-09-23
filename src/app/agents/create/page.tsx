@@ -1027,7 +1027,7 @@ export default function CreateAgentPage() {
               <div style={{ marginTop: "4px", fontSize: "11px" }}>
                 {capturedActions.slice(0, 3).map((action, index) => (
                   <div key={index} style={{ marginBottom: "2px" }}>
-                    {action.step}. {action.action} {action.target ? `on ${action.target}` : ''}
+                    {index + 1}. {action.type} {action.selector ? `on ${action.selector}` : ''}
                   </div>
                 ))}
                 {capturedActions.length > 3 && (
