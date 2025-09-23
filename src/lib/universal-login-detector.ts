@@ -625,6 +625,20 @@ export class UniversalLoginDetector {
         return false;
       }
       
+      // Check if we're still on a login/signin page (strong failure indicator)
+      const currentUrl = page.url();
+      const isStillOnLoginPage = currentUrl.includes('login') || 
+        currentUrl.includes('signin') || 
+        currentUrl.includes('auth') ||
+        currentUrl.includes('accounts.google.com/signin') ||
+        currentUrl.includes('accounts.google.com/oauth') ||
+        currentUrl.includes('myaccount.google.com/signin');
+        
+      if (isStillOnLoginPage) {
+        console.log('❌ Still on login page - login failed');
+        return false;
+      }
+      
       // Check for remaining login form elements (strong failure indicator)
       const remainingLoginElements = await page.$('input[type="password"], input[name*="password"], input[name*="pass"]');
       if (remainingLoginElements.length > 0) {
@@ -632,33 +646,135 @@ export class UniversalLoginDetector {
         return false;
       }
       
-      // Check for specific error messages in the page
+      // Check for specific error messages in the page (enhanced)
       const errorMessages = await page.evaluate(() => {
-        const errorElements = document.querySelectorAll('[class*="error"], [class*="invalid"], [class*="failed"], [id*="error"], [id*="invalid"]');
-        return Array.from(errorElements).map(el => el.textContent).join(' ');
+        // Get all possible error elements
+        const errorSelectors = [
+          '[class*="error"]',
+          '[class*="invalid"]', 
+          '[class*="failed"]',
+          '[id*="error"]',
+          '[id*="invalid"]',
+          '[role="alert"]',
+          '[aria-live="polite"]',
+          '[aria-live="assertive"]',
+          '.error',
+          '.invalid',
+          '.failed',
+          '.warning',
+          '.danger'
+        ];
+        
+        const errorElements = document.querySelectorAll(errorSelectors.join(', '));
+        const errorTexts = Array.from(errorElements).map(el => el.textContent).join(' ');
+        
+        // Also check for Google-specific error patterns
+        const googleErrorSelectors = [
+          '[data-testid*="error"]',
+          '[data-testid*="invalid"]',
+          '[data-testid*="failed"]',
+          '[aria-describedby*="error"]'
+        ];
+        
+        const googleErrorElements = document.querySelectorAll(googleErrorSelectors.join(', '));
+        const googleErrorTexts = Array.from(googleErrorElements).map(el => el.textContent).join(' ');
+        
+        return errorTexts + ' ' + googleErrorTexts;
       });
       
-      if (errorMessages.toLowerCase().includes('invalid') || 
-          errorMessages.toLowerCase().includes('incorrect') ||
-          errorMessages.toLowerCase().includes('wrong') ||
-          errorMessages.toLowerCase().includes('failed')) {
+      // Enhanced error detection
+      const errorKeywords = [
+        'invalid', 'incorrect', 'wrong', 'failed', 'error', 'unauthorized',
+        'forbidden', 'denied', 'rejected', 'invalid password', 'incorrect password',
+        'wrong password', 'bad password', 'password incorrect', 'invalid username',
+        'username not found', 'account not found', 'user not found',
+        'invalid credentials', 'incorrect credentials', 'wrong credentials',
+        'login failed', 'sign in failed', 'authentication failed',
+        'authentication error', 'credential error', 'please try again',
+        'something went wrong', 'try again', 'access denied'
+      ];
+      
+      const hasErrorKeywords = errorKeywords.some(keyword => 
+        errorMessages.toLowerCase().includes(keyword)
+      );
+      
+      if (hasErrorKeywords) {
         console.log('❌ Login failed - found error messages:', errorMessages);
         return false;
       }
       
-      // Only assume success if we have strong positive indicators
-      const hasPositiveIndicators = currentUrl !== originalUrl || 
-        pageContent.toLowerCase().includes('welcome') ||
-        pageContent.toLowerCase().includes('dashboard') ||
-        pageContent.toLowerCase().includes('profile') ||
-        pageContent.toLowerCase().includes('account');
-        
-      if (!hasPositiveIndicators) {
-        console.log('❌ No positive indicators found - login likely failed');
+      // Check for Google-specific error patterns
+      const googleErrorPatterns = [
+        'Couldn\'t sign you in',
+        'Wrong password',
+        'Enter a valid email',
+        'This account doesn\'t exist',
+        'Enter a valid password',
+        'Try again',
+        'Something went wrong'
+      ];
+      
+      const hasGoogleErrors = googleErrorPatterns.some(pattern => 
+        pageContent.toLowerCase().includes(pattern.toLowerCase())
+      );
+      
+      if (hasGoogleErrors) {
+        console.log('❌ Login failed - found Google-specific error patterns');
         return false;
       }
       
-      console.log('✅ Login successful - positive indicators found');
+      // Check for strong positive indicators (much more strict)
+      const currentUrl = page.url();
+      const hasUrlChanged = currentUrl !== originalUrl && 
+        !currentUrl.includes('login') && 
+        !currentUrl.includes('signin') &&
+        !currentUrl.includes('auth') &&
+        !currentUrl.includes('error') &&
+        !currentUrl.includes('failed');
+        
+      // Check for specific success elements (not just text)
+      const successElements = await page.$('a[href*="logout"], a[href*="signout"], button[data-testid*="logout"], [data-testid*="user-menu"], [data-testid*="profile-menu"]');
+      const hasSuccessElements = successElements.length > 0;
+      
+      // Check for dashboard-specific elements
+      const dashboardElements = await page.$('[data-testid*="dashboard"], [class*="dashboard"], [id*="dashboard"]');
+      const hasDashboardElements = dashboardElements.length > 0;
+      
+      // Check for user profile elements
+      const profileElements = await page.$('[data-testid*="profile"], [class*="profile"], [id*="profile"], img[alt*="profile"], img[alt*="avatar"]');
+      const hasProfileElements = profileElements.length > 0;
+      
+      // Check for navigation elements that indicate successful login
+      const navElements = await page.$('nav, [role="navigation"], [class*="nav"], [id*="nav"]');
+      const hasNavElements = navElements.length > 0;
+      
+      // Check for specific success text (more restrictive)
+      const successTexts = ['dashboard', 'home', 'my account', 'profile', 'settings', 'logout', 'sign out'];
+      const hasSuccessText = successTexts.some(text => pageContent.toLowerCase().includes(text));
+      
+      // Require multiple strong indicators for success
+      const strongIndicators = [
+        hasUrlChanged,
+        hasSuccessElements,
+        hasDashboardElements,
+        hasProfileElements,
+        hasNavElements && hasSuccessText
+      ];
+      
+      const strongIndicatorCount = strongIndicators.filter(Boolean).length;
+      
+      // Need at least 2 strong indicators for success
+      if (strongIndicatorCount < 2) {
+        console.log(`❌ Insufficient positive indicators (${strongIndicatorCount}/2) - login likely failed`);
+        console.log(`   URL changed: ${hasUrlChanged}`);
+        console.log(`   Success elements: ${hasSuccessElements}`);
+        console.log(`   Dashboard elements: ${hasDashboardElements}`);
+        console.log(`   Profile elements: ${hasProfileElements}`);
+        console.log(`   Navigation + text: ${hasNavElements && hasSuccessText}`);
+        return false;
+      }
+      
+      console.log(`✅ Login successful - ${strongIndicatorCount} strong indicators found`);
       return true;
       
     } catch (error) {
