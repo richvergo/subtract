@@ -74,6 +74,9 @@ export async function POST(
 
     try {
       // Launch browser in non-headless mode so user can see it
+      // Generate unique profile directory for this test
+      const uniqueProfileDir = `/tmp/chrome-test-profile-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      
       browser = await puppeteer.launch({
         headless: false, // Show browser window
         executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', // Use normal Chrome
@@ -83,7 +86,10 @@ export async function POST(
           '--disable-dev-shm-usage',
           '--disable-web-security',
           '--disable-features=VizDisplayCompositor',
-          '--user-data-dir=/tmp/chrome-test-profile'
+          '--disable-background-timer-throttling',
+          '--disable-backgrounding-occluded-windows',
+          '--disable-renderer-backgrounding',
+          '--user-data-dir=' + uniqueProfileDir
         ]
       });
 
@@ -223,6 +229,16 @@ export async function POST(
     } finally {
       if (browser) {
         await browser.close();
+      }
+      
+      // Clean up the unique profile directory
+      if (typeof uniqueProfileDir !== 'undefined') {
+        try {
+          const { execSync } = require('child_process');
+          execSync(`rm -rf "${uniqueProfileDir}"`, { stdio: 'ignore' });
+        } catch (error) {
+          // Ignore cleanup errors
+        }
       }
     }
 

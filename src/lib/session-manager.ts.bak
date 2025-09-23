@@ -208,7 +208,7 @@ export class SessionManager {
       // const pageTitle = await pageObj.title();
 
       // Wait a bit for any redirects to complete
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      await pageObj.waitForTimeout(2000);
 
       // Check for explicit login form elements (more reliable than URL/title)
       const hasLoginForm = await pageObj.$('form[action*="login"], form[action*="signin"], input[type="password"], button[type="submit"]');
