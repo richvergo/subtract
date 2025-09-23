@@ -4,40 +4,20 @@ import { hash } from 'bcryptjs';
 const prisma = new PrismaClient();
 
 async function main() {
-  console.log('🌱 Starting SAFE backend seeding (preserves real user data)...');
+  console.log('🌱 Starting backend stability seeding...');
 
   try {
     await prisma.$transaction(async (tx) => {
-      // Clear existing TEST data only (preserve real user data)
-      await tx.agentRun.deleteMany({ where: { agent: { OR: [{ name: "Presentation Creator" }, { name: "Data Entry Bot" }, { name: { contains: "Test" } }] } } });
-      await tx.agentLogin.deleteMany({ where: { agent: { OR: [{ name: "Presentation Creator" }, { name: "Data Entry Bot" }, { name: { contains: "Test" } }] } } });
-      await tx.agent.deleteMany({ where: { OR: [{ name: "Presentation Creator" }, { name: "Data Entry Bot" }, { name: { contains: "Test" } }] } });
-      
-      // Only clear test logins (preserve real user logins like Vergo)
-      await tx.login.deleteMany({
-        where: {
-          OR: [
-            { name: 'Google Slides' },  // Test login
-            { name: 'Notion' },         // Test login
-            { name: { contains: 'Test' } }  // Any login with "Test" in name
-          ]
-        }
-      });
-      
+      // Clear existing data for clean seed
+      await tx.agentRun.deleteMany();
+      await tx.agentLogin.deleteMany();
+      await tx.agent.deleteMany();
+      await tx.login.deleteMany();
       await tx.membership.deleteMany();
-      
-      // Only clear test users (preserve real user accounts)
-      await tx.user.deleteMany({
-        where: {
-          email: {
-            in: ['test@example.com', 'alice@example.com', 'bob@example.com']
-          }
-        }
-      });
-      
+      await tx.user.deleteMany();
       await tx.entity.deleteMany();
 
-      console.log('🧹 Cleared test data (preserved real user data)');
+      console.log('🧹 Cleared existing data');
 
       // Hash password for all users
       const passwordHash = await hash('password123', 10);
@@ -98,7 +78,7 @@ async function main() {
       });
       console.log('✅ Created memberships');
 
-      // Create test logins (these will be cleared on next safe seed)
+      // Create test logins
       const testLogins = [
         {
           name: 'Google Slides',
@@ -192,26 +172,26 @@ async function main() {
       console.log('✅ Linked agents to logins');
     });
 
-    console.log('\n🎉 SAFE seeding completed successfully!');
+    console.log('\n🎉 Backend stability seeding completed successfully!');
     console.log('\n📊 Summary:');
-    console.log('- 3 Test Users with bcrypt hashed passwords');
+    console.log('- 2 Test Users with bcrypt hashed passwords');
     console.log('- 1 Test Entity with memberships');
-    console.log('- 2 Test Logins (Google Slides, Notion) - YOUR REAL LOGINS PRESERVED');
+    console.log('- 2 Test Logins (Google Slides, Notion)');
     console.log('- 2 Test Agents (Draft, Active)');
     console.log('\n🔐 Test Login Credentials:');
     console.log('- Alice: alice@example.com / password123');
     console.log('- Bob: bob@example.com / password123');
-    console.log('\n🛡️ Your real logins (Vergo, etc.) have been preserved!');
+    console.log('\n🚀 Backend is now stable and ready for frontend development!');
 
   } catch (error) {
-    console.error('❌ Safe seeding failed:', error);
+    console.error('❌ Seeding failed:', error);
     throw error;
   }
 }
 
 main()
   .catch((e) => {
-    console.error('❌ Safe seed script failed:', e);
+    console.error('❌ Seed script failed:', e);
     process.exit(1);
   })
   .finally(async () => {

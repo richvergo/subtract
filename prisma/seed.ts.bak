@@ -9,9 +9,9 @@ async function main() {
   try {
     await prisma.$transaction(async (tx) => {
       // Clear existing TEST data only (preserve real user data)
-      await tx.agentRun.deleteMany({ where: { agent: { OR: [{ name: "Presentation Creator" }, { name: "Data Entry Bot" }, { name: { contains: "Test" } }] } } });
-      await tx.agentLogin.deleteMany({ where: { agent: { OR: [{ name: "Presentation Creator" }, { name: "Data Entry Bot" }, { name: { contains: "Test" } }] } } });
-      await tx.agent.deleteMany({ where: { OR: [{ name: "Presentation Creator" }, { name: "Data Entry Bot" }, { name: { contains: "Test" } }] } });
+      await tx.agentRun.deleteMany();
+      await tx.agentLogin.deleteMany();
+      await tx.agent.deleteMany();
       
       // Only clear test logins (preserve real user logins like Vergo)
       await tx.login.deleteMany({
