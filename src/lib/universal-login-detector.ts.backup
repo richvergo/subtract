@@ -578,7 +578,7 @@ export class UniversalLoginDetector {
         }
       }
       
-      // Check for error indicators (enhanced)
+      // Check for error indicators
       const errorIndicators = [
         'Invalid',
         'Incorrect',
@@ -588,27 +588,7 @@ export class UniversalLoginDetector {
         'Try again',
         'Login failed',
         'Authentication failed',
-        'Access denied',
-        'Invalid password',
-        'Incorrect password',
-        'Wrong password',
-        'Bad password',
-        'Password incorrect',
-        'Invalid username',
-        'Username not found',
-        'Account not found',
-        'User not found',
-        'Invalid credentials',
-        'Incorrect credentials',
-        'Wrong credentials',
-        'Unauthorized',
-        'Forbidden',
-        'Login unsuccessful',
-        'Sign in failed',
-        'Authentication error',
-        'Credential error',
-        'Please try again',
-        'Something went wrong'
+        'Access denied'
       ];
       
       for (const indicator of errorIndicators) {
@@ -625,40 +605,8 @@ export class UniversalLoginDetector {
         return false;
       }
       
-      // Check for remaining login form elements (strong failure indicator)
-      const remainingLoginElements = await page.$('input[type="password"], input[name*="password"], input[name*="pass"]');
-      if (remainingLoginElements.length > 0) {
-        console.log('❌ Login form still present - login failed');
-        return false;
-      }
-      
-      // Check for specific error messages in the page
-      const errorMessages = await page.evaluate(() => {
-        const errorElements = document.querySelectorAll('[class*="error"], [class*="invalid"], [class*="failed"], [id*="error"], [id*="invalid"]');
-        return Array.from(errorElements).map(el => el.textContent).join(' ');
-      });
-      
-      if (errorMessages.toLowerCase().includes('invalid') || 
-          errorMessages.toLowerCase().includes('incorrect') ||
-          errorMessages.toLowerCase().includes('wrong') ||
-          errorMessages.toLowerCase().includes('failed')) {
-        console.log('❌ Login failed - found error messages:', errorMessages);
-        return false;
-      }
-      
-      // Only assume success if we have strong positive indicators
-      const hasPositiveIndicators = currentUrl !== originalUrl || 
-        pageContent.toLowerCase().includes('welcome') ||
-        pageContent.toLowerCase().includes('dashboard') ||
-        pageContent.toLowerCase().includes('profile') ||
-        pageContent.toLowerCase().includes('account');
-        
-      if (!hasPositiveIndicators) {
-        console.log('❌ No positive indicators found - login likely failed');
-        return false;
-      }
-      
-      console.log('✅ Login successful - positive indicators found');
+      // Default to success if no clear indicators
+      console.log('⚠️ Unable to determine login status - assuming success');
       return true;
       
     } catch (error) {

@@ -76,14 +76,14 @@ export async function POST(
       // Launch browser in non-headless mode so user can see it
       browser = await puppeteer.launch({
         headless: false, // Show browser window
+        executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', // Use normal Chrome
         args: [
           '--no-sandbox',
           '--disable-setuid-sandbox',
           '--disable-dev-shm-usage',
-          '--disable-accelerated-2d-canvas',
-          '--no-first-run',
-          '--no-zygote',
-          '--disable-gpu'
+          '--disable-web-security',
+          '--disable-features=VizDisplayCompositor',
+          '--user-data-dir=/tmp/chrome-test-profile'
         ]
       });
 
