@@ -235,34 +235,15 @@ export default function LoginsPage() {
 
   const handleTestLogin = async (loginId: string, loginName: string) => {
     try {
-      // First check if we have session data
-      const checkResponse = await fetch(`/api/logins/${loginId}/check`, {
-        method: 'POST',
-        credentials: 'include'
-      });
-
-      if (!checkResponse.ok) {
-        const errorData = await checkResponse.json();
-        throw new Error(errorData.error || `Failed to check login: ${checkResponse.status}`);
-      }
-
-      const checkResult = await checkResponse.json();
-      
-      // If we have session data and it's working, show success
-      if (!checkResult.needsReconnect && checkResult.status === 'ACTIVE') {
-        alert(`✅ ${loginName} is working properly!`);
-        mutate();
-        return;
-      }
-
-      // If we need to test/login, start the automated browser test
+      // Skip the slow /check call and go straight to the test
+      // This eliminates the 5-second delay from launching the first browser
       const confirmMessage = `🌐 This will open a browser window to test ${loginName}.\n\nPlease watch as the system automatically logs in using your credentials. The browser will close automatically once login is successful.\n\nContinue?`;
       
       if (!confirm(confirmMessage)) {
         return;
       }
 
-      // Start automated browser test
+      // Start automated browser test directly
       const testResponse = await fetch(`/api/logins/${loginId}/test-interactive`, {
         method: 'POST',
         credentials: 'include'
@@ -735,7 +716,23 @@ export default function LoginsPage() {
                     <td style={{
                       padding: "12px 8px"
                     }}>
-                      {getStatusBadge(login.status)}
+                      <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                        {getStatusBadge(login.status)}
+                        {login.errorMessage && (
+                          <div style={{
+                            fontSize: "11px",
+                            color: "#dc3545",
+                            backgroundColor: "#f8d7da",
+                            padding: "4px 6px",
+                            borderRadius: "3px",
+                            border: "1px solid #f5c6cb",
+                            maxWidth: "200px",
+                            wordWrap: "break-word"
+                          }}>
+                            {login.errorMessage}
+                          </div>
+                        )}
+                      </div>
                     </td>
                     <td style={{
                       padding: "12px 8px"

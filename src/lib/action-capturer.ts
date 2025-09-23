@@ -165,8 +165,8 @@ export class ActionCapturer {
       console.log(`🖱️ Captured click: ${action.target} (${action.elementType})`);
     };
 
-    document.addEventListener('click', clickHandler, true);
-    this.eventListeners.push({ element: document, event: 'click', handler: clickHandler });
+    document.addEventListener('click', clickHandler as EventListener, true);
+    this.eventListeners.push({ element: document, event: 'click', handler: clickHandler as EventListener });
   }
 
   /**
@@ -310,8 +310,8 @@ export class ActionCapturer {
       console.log(`⌨️ Captured key: ${event.key} on ${action.target}`);
     };
 
-    document.addEventListener('keydown', keyHandler, true);
-    this.eventListeners.push({ element: document, event: 'keydown', handler: keyHandler });
+    document.addEventListener('keydown', keyHandler as EventListener, true);
+    this.eventListeners.push({ element: document, event: 'keydown', handler: keyHandler as EventListener });
   }
 
   /**

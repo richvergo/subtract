@@ -228,7 +228,7 @@ export class UniversalLoginDetector {
     }
     
     // Final retry with longer wait for slow-loading pages
-    await new Promise(resolve => setTimeout(resolve, 3000));
+    await new Promise(resolve => setTimeout(resolve, 1500));
     
     for (const selector of selectors) {
       try {
@@ -338,7 +338,7 @@ export class UniversalLoginDetector {
       await new Promise(resolve => setTimeout(resolve, 1000));
     } catch (error) {
       // Fallback to fixed wait time
-      await new Promise(resolve => setTimeout(resolve, 3000));
+      await new Promise(resolve => setTimeout(resolve, 1500));
     }
   }
 
@@ -383,7 +383,7 @@ export class UniversalLoginDetector {
       
       // Wait for next step and page to potentially reload/navigate
       console.log('⏳ Waiting for page transition...');
-      await new Promise(resolve => setTimeout(resolve, 4000));
+      await new Promise(resolve => setTimeout(resolve, 1500));
       
       // Re-find password field after page transition (elements become detached)
       console.log('🔍 Re-finding password field after page transition...');
@@ -400,7 +400,7 @@ export class UniversalLoginDetector {
       
       // Wait for login to complete
       console.log('⏳ Waiting for login to complete...');
-      await new Promise(resolve => setTimeout(resolve, 5000));
+      await new Promise(resolve => setTimeout(resolve, 2000));
       
       return { success: true };
     } catch (error) {
@@ -421,7 +421,7 @@ export class UniversalLoginDetector {
       
       // Wait for next step and page to potentially reload/navigate
       console.log('⏳ Waiting for page transition...');
-      await new Promise(resolve => setTimeout(resolve, 4000));
+      await new Promise(resolve => setTimeout(resolve, 1500));
       
       // Re-find password field after page transition (elements become detached)
       console.log('🔍 Re-finding password field after page transition...');
@@ -438,7 +438,7 @@ export class UniversalLoginDetector {
       
       // Wait for login to complete
       console.log('⏳ Waiting for login to complete...');
-      await new Promise(resolve => setTimeout(resolve, 5000));
+      await new Promise(resolve => setTimeout(resolve, 2000));
       
       return { success: true };
     } catch (error) {
@@ -469,7 +469,7 @@ export class UniversalLoginDetector {
       }
       
       // Wait for login to complete
-      await new Promise(resolve => setTimeout(resolve, 3000));
+      await new Promise(resolve => setTimeout(resolve, 1500));
       
       return { success: true };
     } catch (error) {
@@ -501,7 +501,7 @@ export class UniversalLoginDetector {
       }
       
       // Wait for SPA to process
-      await new Promise(resolve => setTimeout(resolve, 4000));
+      await new Promise(resolve => setTimeout(resolve, 1500));
       
       return { success: true };
     } catch (error) {
@@ -571,24 +571,62 @@ export class UniversalLoginDetector {
       ];
       
       const pageContent = await page.content();
-      for (const indicator of successIndicators) {
-        if (pageContent.toLowerCase().includes(indicator.toLowerCase())) {
-          console.log(`✅ Login successful - found success indicator: ${indicator}`);
-          return true;
-        }
-      }
+      // DISABLED - This was causing false positives with "Welcome" text
+      // Google shows "Welcome" even during failed logins, so this check is unreliable
+      // for (const indicator of successIndicators) {
+      //   if (pageContent.toLowerCase().includes(indicator.toLowerCase())) {
+      //     console.log(`✅ Login successful - found success indicator: ${indicator}`);
+      //     return true;
+      //   }
+      // }
       
-      // Check for error indicators
+      // Check for error indicators (ENHANCED - Error-first approach)
       const errorIndicators = [
+        // Password-specific errors
+        'password is incorrect',
+        'password incorrect',
+        'incorrect password',
+        'wrong password',
+        'invalid password',
+        'password does not match',
+        'password is wrong',
+        'that password isn\'t right',
+        
+        // Credential errors
+        'invalid credentials',
+        'incorrect credentials',
+        'wrong credentials',
+        'bad credentials',
+        'credentials are incorrect',
+        
+        // Username/email errors
+        'username not found',
+        'email not found',
+        'user not found',
+        'account not found',
+        'invalid username',
+        'invalid email',
+        
+        // Google-specific errors
+        'couldn\'t sign you in',
+        'couldn\'t sign in',
+        'sign in failed',
+        'wrong password. try again',
+        'enter a valid password',
+        'that password isn\'t right',
+        
+        // Generic errors
         'Invalid',
-        'Incorrect',
+        'Incorrect', 
         'Wrong',
         'Error',
         'Failed',
         'Try again',
         'Login failed',
         'Authentication failed',
-        'Access denied'
+        'Access denied',
+        'something went wrong',
+        'please try again'
       ];
       
       for (const indicator of errorIndicators) {
@@ -605,9 +643,24 @@ export class UniversalLoginDetector {
         return false;
       }
       
-      // Default to success if no clear indicators
-      console.log('⚠️ Unable to determine login status - assuming success');
-      return true;
+      // Only assume success if URL changed away from login page
+      const finalUrl = page.url();
+      const urlChanged = finalUrl !== originalUrl;
+      const stillOnLoginPage = finalUrl.includes('login') || 
+        finalUrl.includes('signin') || 
+        finalUrl.includes('auth') ||
+        finalUrl.includes('accounts.google.com');
+        
+      if (urlChanged && !stillOnLoginPage) {
+        console.log(`✅ Login successful - URL changed away from login page: ${finalUrl}`);
+        return true;
+      }
+      
+      // Default to failure for safety (error-first approach)
+      console.log('⚠️ Unable to determine login status - ASSUMING FAILURE for safety');
+      console.log(`   URL changed: ${urlChanged}`);
+      console.log(`   Still on login page: ${stillOnLoginPage}`);
+      return false;
       
     } catch (error) {
       console.error('Error verifying login success:', error);

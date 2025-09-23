@@ -71,25 +71,24 @@ export async function POST(
 
     let browser = null;
     let page = null;
+    let uniqueProfileDir = null;
 
     try {
       // Launch browser in non-headless mode so user can see it
       // Generate unique profile directory for this test
-      const uniqueProfileDir = `/tmp/chrome-test-profile-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      uniqueProfileDir = `/tmp/chrome-test-profile-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
       
       browser = await puppeteer.launch({
         headless: false, // Show browser window
         executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', // Use normal Chrome
         args: [
           '--no-sandbox',
-          '--disable-setuid-sandbox',
           '--disable-dev-shm-usage',
           '--disable-web-security',
-          '--disable-features=VizDisplayCompositor',
-          '--disable-background-timer-throttling',
-          '--disable-backgrounding-occluded-windows',
-          '--disable-renderer-backgrounding',
-          '--user-data-dir=' + uniqueProfileDir
+          '--user-data-dir=' + uniqueProfileDir,
+          '--disable-extensions',
+          '--disable-plugins',
+          '--disable-default-apps'
         ]
       });
 
@@ -101,7 +100,7 @@ export async function POST(
       await page.goto(login.loginUrl, { waitUntil: 'networkidle2' });
 
       // Wait a moment for page to load
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      await new Promise(resolve => setTimeout(resolve, 1000));
 
       // Use Universal Login Detector
       console.log('🔍 Looking for login form...');
@@ -135,7 +134,7 @@ export async function POST(
 
       // Verify login success
       console.log('⏳ Waiting for login to complete...');
-      await new Promise(resolve => setTimeout(resolve, 3000));
+      await new Promise(resolve => setTimeout(resolve, 1000));
 
       const isSuccess = await UniversalLoginDetector.verifyLoginSuccess(page, login.loginUrl);
       if (!isSuccess) {
@@ -177,22 +176,48 @@ export async function POST(
       let newStatus: 'BROKEN' | 'NEEDS_RECONNECT' = 'BROKEN';
       let errorMessage = error instanceof Error ? error.message : String(error);
       
-      // Check for common credential-related errors
+      // Check for common credential-related errors (enhanced with new detection system)
       const credentialErrors = [
-        'invalid password',
-        'incorrect password', 
+        // Password-specific errors (from new error-first detection)
+        'password is incorrect',
+        'password incorrect',
+        'incorrect password',
         'wrong password',
+        'invalid password',
+        'password does not match',
+        'password is wrong',
+        'that password isn\'t right',
         'bad password',
         'password incorrect',
-        'invalid username',
-        'username not found',
-        'account not found',
-        'user not found',
+        
+        // Credential errors
         'invalid credentials',
         'incorrect credentials',
         'wrong credentials',
+        'bad credentials',
+        'credentials are incorrect',
+        
+        // Username/email errors
+        'username not found',
+        'email not found',
+        'user not found',
+        'account not found',
+        'invalid username',
+        'invalid email',
+        
+        // Google-specific errors
+        'couldn\'t sign you in',
+        'couldn\'t sign in',
+        'sign in failed',
+        'wrong password. try again',
+        'enter a valid password',
+        'that password isn\'t right',
+        
+        // Generic errors
         'access denied',
-        'unauthorized'
+        'unauthorized',
+        'login failed',
+        'authentication failed'
       ];
       
       const isCredentialError = credentialErrors.some(err => 
@@ -201,7 +226,24 @@ export async function POST(
       
       if (isCredentialError) {
         newStatus = 'NEEDS_RECONNECT';
-        errorMessage = 'Invalid credentials - please update login details';
+        
+        // Check if it's specifically a password error
+        const passwordErrors = [
+          'password is incorrect', 'password incorrect', 'incorrect password', 
+          'wrong password', 'invalid password', 'password does not match',
+          'password is wrong', 'that password isn\'t right', 'bad password',
+          'wrong password. try again', 'enter a valid password'
+        ];
+        
+        const isPasswordError = passwordErrors.some(err => 
+          errorMessage.toLowerCase().includes(err)
+        );
+        
+        if (isPasswordError) {
+          errorMessage = 'Incorrect Password - please update your password';
+        } else {
+          errorMessage = 'Invalid credentials - please update login details';
+        }
       }
       
       // Update login with failure
@@ -232,7 +274,7 @@ export async function POST(
       }
       
       // Clean up the unique profile directory
-      if (typeof uniqueProfileDir !== 'undefined') {
+      if (uniqueProfileDir) {
         try {
           const { execSync } = require('child_process');
           execSync(`rm -rf "${uniqueProfileDir}"`, { stdio: 'ignore' });
