@@ -1,7 +1,7 @@
 # Full Validation Report
 
-**Generated:** Tue Sep 23 23:09:31 EDT 2025
-**Duration:** 1 seconds
+**Generated:** Tue Sep 23 23:09:43 EDT 2025
+**Duration:** 0 seconds
 **Status:** ✅ PASSED
 
 ## Test Layer Results
@@ -9,17 +9,17 @@
 ### Unit & Integration Tests
 - **Status:** ✅ Completed
 - **Log File:** validation-logs/unit-test.log
-- **Memory Usage:** 1856KB
+- **Memory Usage:** 1888KB
 
 ### Smoke Tests
 - **Status:** ✅ Completed
 - **Log File:** validation-logs/smoke-test.log
-- **Memory Usage:** 1856KB
+- **Memory Usage:** 1888KB
 
 ### Domain Scope Regression Tests
 - **Status:** ✅ Completed
 - **Log File:** validation-logs/regression-test.log
-- **Memory Usage:** 1856KB
+- **Memory Usage:** 1888KB
 
 ## Domain Scoping Validation
 
@@ -40,7 +40,7 @@
 - **Open Handles:** ✅ None detected
 
 ## Memory Usage
-- **Current:** 1856KB
+- **Current:** 1888KB
 - **Status:** ✅ Normal
 
 ## Zod Schema Validation
