@@ -71,6 +71,7 @@ export class PuppeteerCaptureService {
   private loginAdapter: LoginAgentAdapter | null = null
   private domainScope: DomainScope | null = null
   private isRecordingPaused = false
+  private debugMode = false
 
   constructor(private config: CaptureConfig) {
     // this.selectorStrategy = new SelectorStrategy({
@@ -79,6 +80,20 @@ export class PuppeteerCaptureService {
     //   fallback: true,
     //   timeout: config.timeout
     // })
+    
+    // Enable debug mode if environment variable is set
+    this.debugMode = process.env.DOMAIN_SCOPE_DEBUG === 'true'
+  }
+
+  /**
+   * Log domain scope debug information
+   */
+  private logDomainScopeDebug(message: string, url: string, status: 'ALLOWED' | 'BLOCKED' | 'SSO'): void {
+    if (this.debugMode) {
+      const statusIcon = status === 'ALLOWED' ? '✅' : status === 'BLOCKED' ? '❌' : '✅'
+      console.log(`🌐 ${status} ${statusIcon} ${url}`)
+      console.log(`   ${message}`)
+    }
   }
 
   /**
@@ -597,13 +612,31 @@ export class PuppeteerCaptureService {
 
     const navigationEvent = this.domainScope.recordNavigation(frame.url)
     
-    // Log navigation decision
+    // Log navigation decision with debug information
     console.log(`🌐 Domain scope navigation:`, {
       url: frame.url,
       domain: navigationEvent.domain,
       allowed: navigationEvent.allowed,
       reason: navigationEvent.reason
     })
+    
+    // Debug logging for domain scope decisions
+    if (this.debugMode) {
+      const url = frame.url
+      const domain = navigationEvent.domain
+      const allowed = navigationEvent.allowed
+      const reason = navigationEvent.reason
+      
+      if (allowed) {
+        if (reason === 'SSO redirect' || domain.includes('auth0.com') || domain.includes('login.')) {
+          this.logDomainScopeDebug(`SSO authentication domain`, url, 'SSO')
+        } else {
+          this.logDomainScopeDebug(`Allowed domain navigation`, url, 'ALLOWED')
+        }
+      } else {
+        this.logDomainScopeDebug(`Blocked external domain: ${reason}`, url, 'BLOCKED')
+      }
+    }
 
     // Update recording pause state
     const wasPaused = this.isRecordingPaused

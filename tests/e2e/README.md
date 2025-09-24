@@ -7,6 +7,100 @@ This directory contains end-to-end tests that validate the complete frontend ↔
 ### BasicWorkflowSmoke.test.tsx
 Comprehensive end-to-end test that validates the full workflow creation, configuration, and execution pipeline.
 
+## Final Pre-Commit Validation
+
+### Overview
+The Final Pre-Commit Validation system provides a comprehensive validation chain to confirm that the domain-scoping update in PuppeteerCaptureService is correct, stable, and non-breaking before any commit. This includes domain-specific debug logs to track navigation decisions.
+
+### Validation Process
+
+#### Final Pre-Commit Validation Chain
+The final pre-commit validation runs a comprehensive validation chain with debug logging:
+
+1. **ESLint + Unused Imports** (`npm run lint`)
+   - Code quality and style validation
+   - Unused import detection
+   - Ensures clean codebase
+
+2. **TypeScript Strict Mode** (`npm run type-check`)
+   - Type safety validation
+   - Strict type checking
+   - Ensures type correctness
+
+3. **Unit + Integration Tests** (`npm run test`)
+   - All existing unit and integration tests
+   - Ensures no regressions in existing functionality
+   - Validates core business logic
+
+4. **End-to-End Smoke Tests** (`npm run test:smoke`)
+   - End-to-end workflow execution with domain scoping
+   - Validates that run logs contain only allowed domain actions
+   - Ensures no extraneous domain events are recorded
+
+5. **Domain Scope Regression Tests** (`npm run test:regression`)
+   - Tests domain scope initialization and configuration
+   - Validates allowed domain navigation (getvergo.com, vergoerp.io)
+   - Tests external domain blocking (gmail.com, slack.com)
+   - Validates SSO redirect handling (auth0.com)
+
+6. **Full Validation Runner** (`npm run validate:all`)
+   - Comprehensive validation across all layers
+   - Memory usage monitoring
+   - Puppeteer session management
+   - Zod schema compliance
+
+#### Domain Scope Debug Logging
+
+When `DOMAIN_SCOPE_DEBUG=true` is enabled, the system logs every navigation decision:
+
+```
+🌐 ALLOWED ✅ apply.getvergo.com/transactions
+   Allowed domain navigation
+
+🌐 BLOCKED ❌ mail.google.com
+   Blocked external domain: outside target system
+
+🌐 SSO ✅ login.auth0.com
+   SSO authentication domain
+```
+
+#### How to Run Locally
+
+```bash
+# Run complete final pre-commit validation with debug logs
+DOMAIN_SCOPE_DEBUG=true npm run precommit:final
+
+# Run without debug logs
+npm run precommit:final
+
+# Individual validation steps
+npm run lint                    # ESLint + unused imports
+npm run type-check             # TypeScript strict mode
+npm run test                   # Unit & integration tests
+npm run test:smoke            # End-to-end smoke tests
+npm run test:regression        # Domain scope regression tests
+npm run validate:all           # Full validation runner
+```
+
+### Summary Output
+
+The final validation provides a clear summary table showing:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                        PRE-COMMIT FINAL VALIDATION RESULTS                   │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ Validation Step                    │ Status │ Duration │ Memory │ Details   │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ ESLint                            │ PASS   │ 2s       │ 45MB   │ OK        │
+│ TypeScript Type Check             │ PASS   │ 3s       │ 52MB   │ OK        │
+│ Unit & Integration Tests          │ PASS   │ 15s      │ 48MB   │ OK        │
+│ Smoke Tests                       │ PASS   │ 8s       │ 51MB   │ OK        │
+│ Domain Scope Regression           │ PASS   │ 1s       │ 48MB   │ OK        │
+│ Full Validation Runner             │ PASS   │ 2s       │ 51MB   │ OK        │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
 ## Pre-Commit Validation
 
 ### Overview

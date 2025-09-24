@@ -1,4 +1,4 @@
 #!/usr/bin/env sh
 . "$(dirname -- "$0")/_/husky.sh"
 
-npm run precommit:validate
+DOMAIN_SCOPE_DEBUG=true bash scripts/precommit-final-check.sh

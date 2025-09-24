@@ -27,6 +27,7 @@
     "validate:domain-scope": "./scripts/run-domain-scope-validation.sh",
     "validate:all": "bash scripts/run-full-validation.sh",
     "precommit:validate": "bash scripts/precommit-validate.sh",
+    "precommit:final": "DOMAIN_SCOPE_DEBUG=true bash scripts/precommit-final-check.sh",
     "validate-api-contract": "./scripts/validate-api-contract.sh",
     "pre-commit": "npm run lint && npm run type-check && npm run test:unit && npm run test:logins-protection && npm run validate-api-contract",
     "type-check": "tsc --noEmit",
