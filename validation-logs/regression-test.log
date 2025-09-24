@@ -825,3 +825,68 @@ End Memory: 1792KB
 Duration: 0s
 Memory Delta: 0KB
 ----------------------------------------
+Command: npm run test:regression
+Start Time: Tue Sep 23 23:10:45 EDT 2025
+Start Memory: 1824KB
+----------------------------------------
+
+> vergo-automation-platform@0.3.0 test:regression
+> jest tests/agents/capture/DomainScopeRegression.test.ts --runInBand
+
+  console.log
+    🌐 Domain scope initialized: getvergo.com
+
+      at PuppeteerCaptureService.initialize (src/lib/agents/capture/PuppeteerCaptureService.ts:110:15)
+
+  console.log
+    🎬 PuppeteerCaptureService initialized
+
+      at PuppeteerCaptureService.initialize (src/lib/agents/capture/PuppeteerCaptureService.ts:119:13)
+
+PASS node tests/agents/capture/DomainScopeRegression.test.ts
+  Domain Scope Regression Tests
+    Within Base Domain Navigation
+      ✓ should record actions within base domain (apply.getvergo.com) (3 ms)
+      ✓ should maintain recording state across multiple base domain navigations (1 ms)
+    Outside Domain Navigation
+      ✓ should ignore actions and fire banner event for external domains (1 ms)
+      ✓ should pause recording when navigating to external domains
+    SSO Redirect Handling
+      ✓ should record login form interactions on SSO providers (1 ms)
+      ✓ should handle SSO redirect flow and return to base domain
+    Allowed Domain Expansion
+      ✓ should allow navigation to explicitly allowed domains (2 ms)
+      ✓ should support dynamic domain expansion
+    Missing Base Domain Error Handling
+      ✓ should throw error when base domain is missing (8 ms)
+      ✓ should throw error when base domain is undefined
+    Domain Scope Integration with PuppeteerCaptureService
+      ✓ should initialize domain scope in capture service (14 ms)
+      ✓ should handle domain scope without configuration
+    Navigation History and Statistics
+      ✓ should track navigation history correctly (1 ms)
+      ✓ should provide accurate domain statistics
+    Edge Cases and Error Handling
+      ✓ should handle malformed URLs gracefully
+      ✓ should handle case insensitive domains (1 ms)
+      ✓ should handle URLs with ports and paths
+    Configuration Validation
+      ✓ should validate domain scope configuration with Zod
+      ✓ should reject invalid configuration (1 ms)
+    Performance and Memory Management
+      ✓ should handle large navigation histories efficiently (2 ms)
+      ✓ should clear history efficiently
+    Security and Data Protection
+      ✓ should not log sensitive data in test scenarios
+      ✓ should validate allowedDomains metadata before test run
+
+Test Suites: 1 passed, 1 total
+Tests:       23 passed, 23 total
+Snapshots:   0 total
+Time:        0.26 s, estimated 1 s
+Ran all test suites matching tests/agents/capture/DomainScopeRegression.test.ts.
+End Time: Tue Sep 23 23:10:46 EDT 2025
+End Memory: 1824KB
+Duration: 1s
+Memory Delta: 0KB
+----------------------------------------
