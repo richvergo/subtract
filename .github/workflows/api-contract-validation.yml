@@ -1,0 +1,265 @@
+name: API Contract Validation
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  schedule:
+    # Run daily at 2 AM UTC to catch any schema drift
+    - cron: '0 2 * * *'
+
+jobs:
+  api-contract-validation:
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        node-version: [18.x, 20.x]
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js ${{ matrix.node-version }}
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ matrix.node-version }}
+        cache: 'npm'
+        
+    - name: Install dependencies
+      run: npm ci
+      
+    - name: Run type checking
+      run: npm run type-check
+      
+    - name: Run linting
+      run: npm run lint
+      
+    - name: Run unit tests
+      run: npm run test:unit
+      
+    - name: Run connection validation tests
+      run: npm run test:connection
+      
+    - name: Setup test database
+      run: |
+        npx prisma generate
+        npx prisma db push --accept-data-loss
+        
+    - name: Start API server
+      run: |
+        npm run build
+        npm start &
+        sleep 10
+        
+    - name: Wait for API to be ready
+      run: |
+        timeout 30 bash -c 'until curl -f http://localhost:3000/api/health; do sleep 1; done' || echo "Health check endpoint not available, continuing..."
+        
+    - name: Run API contract validation
+      run: npm run validate-api-contract
+      env:
+        NODE_ENV: test
+        DATABASE_URL: file:./prisma/test.db
+        NEXT_PUBLIC_API_BASE_URL: http://localhost:3000
+        TEST_AGENT_ID: test-agent-id
+        
+    - name: Upload validation report
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: api-contract-validation-report-node-${{ matrix.node-version }}
+        path: api-contract-validation-report.txt
+        
+    - name: Comment PR with validation results
+      if: github.event_name == 'pull_request' && always()
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const fs = require('fs');
+          let report = 'API Contract Validation completed.';
+          
+          try {
+            if (fs.existsSync('api-contract-validation-report.txt')) {
+              const reportContent = fs.readFileSync('api-contract-validation-report.txt', 'utf8');
+              report = `## API Contract Validation Report\n\n\`\`\`\n${reportContent}\n\`\`\``;
+            }
+          } catch (error) {
+            report = `## API Contract Validation Report\n\n❌ Failed to read validation report: ${error.message}`;
+          }
+          
+          github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: report
+          });
+          
+  schema-consistency-check:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20.x'
+        cache: 'npm'
+        
+    - name: Install dependencies
+      run: npm ci
+      
+    - name: Check schema consistency
+      run: |
+        echo "🔍 Checking frontend and backend schema consistency..."
+        
+        # Check if all API response schemas are properly exported
+        if ! grep -r "export.*Schema" src/lib/schemas/ > /dev/null; then
+          echo "❌ No schemas found in src/lib/schemas/"
+          exit 1
+        fi
+        
+        # Check if connection check utility imports all required schemas
+        if ! grep -q "WorkflowValidationResponseSchema\|VariablesResponseSchema\|LogicGenerationResponseSchema\|RunResponseSchema\|ScheduleResponseSchema" src/lib/api/connectionCheck.ts; then
+          echo "❌ Missing schema imports in connectionCheck.ts"
+          exit 1
+        fi
+        
+        # Check if all critical endpoints are defined
+        if ! grep -q "CRITICAL_ENDPOINTS" src/lib/api/connectionCheck.ts; then
+          echo "❌ CRITICAL_ENDPOINTS not defined"
+          exit 1
+        fi
+        
+        echo "✅ Schema consistency check passed"
+        
+    - name: Validate API endpoint configurations
+      run: |
+        echo "🔍 Validating API endpoint configurations..."
+        
+        # Create a temporary validation script
+        cat > validate_endpoints.js << 'EOF'
+        const { CRITICAL_ENDPOINTS } = require('./src/lib/api/connectionCheck');
+        
+        console.log('Validating critical endpoints configuration...');
+        
+        const requiredEndpoints = [
+          'Agent Validation (WorkflowReplay)',
+          'Agent Variables (VariableConfigModal)', 
+          'Logic Generation (LogicEditor)',
+          'Agent Run (RunConsole)',
+          'Schedule Management (ScheduleEditor)'
+        ];
+        
+        const foundEndpoints = CRITICAL_ENDPOINTS.map(ep => ep.name);
+        
+        let allFound = true;
+        requiredEndpoints.forEach(required => {
+          if (!foundEndpoints.includes(required)) {
+            console.error(`❌ Missing endpoint: ${required}`);
+            allFound = false;
+          }
+        });
+        
+        if (!allFound) {
+          console.error('❌ Some required endpoints are missing from CRITICAL_ENDPOINTS');
+          process.exit(1);
+        }
+        
+        // Validate endpoint configurations
+        CRITICAL_ENDPOINTS.forEach(endpoint => {
+          if (!endpoint.name || !endpoint.path || !endpoint.method || !endpoint.schema) {
+            console.error(`❌ Invalid endpoint configuration: ${JSON.stringify(endpoint)}`);
+            process.exit(1);
+          }
+          
+          if (!endpoint.path.includes('[id]')) {
+            console.error(`❌ Endpoint path should contain [id] placeholder: ${endpoint.path}`);
+            process.exit(1);
+          }
+          
+          if (['POST', 'PUT'].includes(endpoint.method) && !endpoint.testData) {
+            console.error(`❌ POST/PUT endpoints should have testData: ${endpoint.name}`);
+            process.exit(1);
+          }
+        });
+        
+        console.log('✅ All endpoint configurations are valid');
+        console.log(`✅ Found ${CRITICAL_ENDPOINTS.length} critical endpoints`);
+        EOF
+        
+        node validate_endpoints.js
+        
+    - name: Check test coverage for connection validation
+      run: |
+        echo "🔍 Checking test coverage for connection validation..."
+        
+        # Run tests with coverage for connection validation files
+        npm run test:connection -- --coverage --collectCoverageFrom="src/lib/api/connectionCheck.ts" --collectCoverageFrom="src/app/components/system/ConnectionValidator.tsx"
+        
+        # Check if coverage meets minimum threshold
+        if [ -f coverage/lcov-report/index.html ]; then
+          echo "✅ Test coverage report generated"
+        else
+          echo "❌ Test coverage report not generated"
+          exit 1
+        fi
+        
+    - name: Upload coverage report
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: connection-validation-coverage
+        path: coverage/
+        
+  security-scan:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20.x'
+        cache: 'npm'
+        
+    - name: Install dependencies
+      run: npm ci
+      
+    - name: Run security audit
+      run: npm audit --audit-level moderate
+      
+    - name: Check for hardcoded secrets
+      run: |
+        echo "🔍 Checking for hardcoded secrets in connection validation code..."
+        
+        # Check for hardcoded API URLs
+        if grep -r "http://localhost\|https://api\.\|http://api\." src/lib/api/connectionCheck.ts src/app/components/system/ConnectionValidator.tsx; then
+          echo "❌ Found potential hardcoded API URLs"
+          exit 1
+        fi
+        
+        # Check for hardcoded credentials
+        if grep -r "password\|secret\|key\|token" src/lib/api/connectionCheck.ts src/app/components/system/ConnectionValidator.tsx | grep -v "process\.env"; then
+          echo "❌ Found potential hardcoded credentials"
+          exit 1
+        fi
+        
+        echo "✅ No hardcoded secrets found"
+        
+    - name: Validate environment variable usage
+      run: |
+        echo "🔍 Validating environment variable usage..."
+        
+        # Check that API base URL uses environment variable
+        if ! grep -q "process\.env\.NEXT_PUBLIC_API_BASE_URL" src/lib/api/connectionCheck.ts; then
+          echo "❌ API base URL should use environment variable"
+          exit 1
+        fi
+        
+        echo "✅ Environment variables are properly configured"

@@ -57,6 +57,14 @@ module.exports = {
     '!src/**/*.d.ts',
     '!src/app/api/auth/**', // Exclude auth routes from coverage
   ],
+  coverageThreshold: {
+    global: {
+      branches: 80,
+      functions: 80,
+      lines: 80,
+      statements: 80
+    }
+  },
   setupFilesAfterEnv: ['<rootDir>/tests/setup.ts'],
   setupFiles: ['<rootDir>/tests/jest-setup.js'],
   testTimeout: 30000, // 30 seconds for integration tests

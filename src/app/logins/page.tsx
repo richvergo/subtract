@@ -46,11 +46,11 @@ export default function LoginsPage() {
   
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isTesting, setIsTesting] = useState(false);
+  // const [isTesting, setIsTesting] = useState(false); // Unused
   const [testResult, setTestResult] = useState<{ success: boolean; status?: string; errorMessage?: string; responseTime?: number; lastChecked?: string } | null>(null);
   const [modalError, setModalError] = useState<string | null>(null);
   const [wizardStep, setWizardStep] = useState(1); // 1: Credentials, 2: Save
-  const [createdLoginId, setCreatedLoginId] = useState<string | null>(null);
+  // const [createdLoginId, setCreatedLoginId] = useState<string | null>(null); // Unused
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editingLogin, setEditingLogin] = useState<{ id: string; name: string; username: string } | null>(null);
   const [editFormData, setEditFormData] = useState({
@@ -58,11 +58,11 @@ export default function LoginsPage() {
     password: ''
   });
   const [isLoadingCredentials, setIsLoadingCredentials] = useState(false);
-  const [hasRecording, setHasRecording] = useState(false);
-  const [recordingBlob, setRecordingBlob] = useState<Blob | null>(null);
-  const [recordingError, setRecordingError] = useState<string | null>(null);
-  const [isRecording, setIsRecording] = useState(false);
-  const [analysisStatus, setAnalysisStatus] = useState<'idle' | 'analyzing' | 'complete' | 'error'>('idle');
+  // const [hasRecording, setHasRecording] = useState(false); // Unused
+  // const [recordingBlob, setRecordingBlob] = useState<Blob | null>(null); // Unused
+  // const [recordingError, setRecordingError] = useState<string | null>(null); // Unused
+  // const [isRecording, setIsRecording] = useState(false); // Unused
+  // const [analysisStatus, setAnalysisStatus] = useState<'idle' | 'analyzing' | 'complete' | 'error'>('idle'); // Unused
   const submissionInProgress = useRef(false);
   const lastSubmissionTime = useRef(0);
   const requestId = useRef(0);
@@ -275,7 +275,7 @@ export default function LoginsPage() {
     }
   };
 
-  const pollLoginStatus = async (loginId: string, loginName: string) => {
+  const _pollLoginStatus = async (loginId: string, loginName: string) => {
     let attempts = 0;
     const maxAttempts = 30; // Poll for up to 30 seconds
     

@@ -1,0 +1,968 @@
+/**
+ * AgentRunner
+ * Enterprise-grade agent execution engine with full login support
+ */
+
+import { Browser, Page } from 'puppeteer'
+import { prisma } from '@/lib/db'
+import { LoginAgentAdapter } from '../login/LoginAgentAdapter'
+import { LoginConfig, validateLoginConfig, LogicSpec, Rule, Loop } from '../logic/schemas'
+import { LogicCompiler } from '../logic/LogicCompiler'
+import { WaitPolicy } from '../replay/waits/WaitPolicy'
+import { RetryPolicy } from './RetryPolicy'
+import { SelectorFallback } from './SelectorFallback'
+
+export interface RunConfig {
+  requiresLogin: boolean
+  loginConfig?: LoginConfig
+  variables: Record<string, unknown>
+  logicSpec?: LogicSpec
+  options?: {
+    headless?: boolean
+    concurrency?: number
+    timeout?: number
+    retryAttempts?: number
+    screenshotOnError?: boolean
+  }
+}
+
+export interface RuleEvaluationResult {
+  ruleId: string
+  ruleName: string
+  condition: boolean
+  action: {
+    type: string
+    executed: boolean
+    result?: any
+  }
+  metadata: {
+    evaluatedAt: number
+    variables: Record<string, unknown>
+  }
+}
+
+export interface LoopContext {
+  loopId: string
+  loopName: string
+  variable: string
+  iterator: string
+  currentValue: unknown
+  currentIndex: number
+  totalIterations: number
+  metadata: Record<string, unknown>
+}
+
+export interface WorkflowAction {
+  id: string
+  type: 'click' | 'type' | 'select' | 'navigate' | 'scroll' | 'wait' | 'hover' | 'double_click' | 'right_click' | 'drag_drop' | 'key_press' | 'screenshot' | 'custom'
+  selector: string
+  value?: string
+  url?: string
+  coordinates?: { x: number; y: number }
+  waitFor?: string
+  timeout?: number
+  retryCount?: number
+  dependencies?: string[]
+  metadata?: Record<string, any>
+}
+
+export interface RunLog {
+  stepId: string
+  actionId: string
+  status: 'success' | 'failed' | 'skipped' | 'retrying'
+  startTime: number
+  endTime: number
+  duration: number
+  attempts: number
+  error?: string
+  screenshot?: string
+  metadata: {
+    selector: string
+    strategy: string
+    confidence: number
+    fallbackUsed: boolean
+    variables: Record<string, unknown>
+  }
+}
+
+export interface WorkflowRunResult {
+  runId: string
+  workflowId: string
+  status: 'success' | 'failed' | 'partial'
+  startTime: number
+  endTime: number
+  duration: number
+  steps: RunLog[]
+  summary: {
+    successCount: number
+    failureCount: number
+    skippedCount: number
+    totalSteps: number
+    successRate: number
+  }
+  error?: string
+  metadata: {
+    browser: string
+    userAgent: string
+    loginRequired: boolean
+    loginSuccess: boolean
+    variables: Record<string, unknown>
+  }
+}
+
+export interface ExecutionError {
+  code: string
+  message: string
+  cause?: Error
+  stepId?: string
+  actionId?: string
+}
+
+export class AgentRunner {
+  private waitPolicy: WaitPolicy
+  private retryPolicy: RetryPolicy
+  private selectorFallback: SelectorFallback
+  private loginAdapter: LoginAgentAdapter | null = null
+  private browser: Browser | null = null
+  private page: Page | null = null
+  private logicCompiler: LogicCompiler
+  private currentLogicSpec: LogicSpec | null = null
+  private evaluatedRules: RuleEvaluationResult[] = []
+  private loopContexts: LoopContext[] = []
+
+  constructor() {
+    this.waitPolicy = new WaitPolicy({
+      timeout: 30000,
+      polling: 1000,
+      visible: true,
+      hidden: false,
+      stable: true
+    })
+    
+    this.retryPolicy = new RetryPolicy({
+      maxAttempts: 3,
+      backoffMultiplier: 2,
+      baseDelay: 1000,
+      maxDelay: 10000,
+      jitter: true
+    })
+    
+    this.selectorFallback = new SelectorFallback({
+      maxAttempts: 3,
+      timeout: 5000,
+      confidence: 0.8
+    })
+    this.logicCompiler = new LogicCompiler()
+  }
+
+  /**
+   * Run a workflow with the given configuration
+   */
+  async run(workflowId: string, runConfig: RunConfig): Promise<WorkflowRunResult> {
+    const startTime = Date.now()
+    let runId = ''
+    let authenticatedPage: Page | null = null
+
+    try {
+      console.log(`🚀 Starting workflow execution: ${workflowId}`)
+
+      // Validate login configuration if provided
+      if (runConfig.requiresLogin && runConfig.loginConfig) {
+        validateLoginConfig(runConfig.loginConfig)
+      }
+
+      // Create workflow run in database
+      const workflowRun = await prisma.workflowRun.create({
+        data: {
+          id: `run_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+          workflowId,
+          status: 'RUNNING',
+          startedAt: new Date(),
+          variables: runConfig.variables,
+          metadata: {
+            runConfig,
+            startTime
+          }
+        }
+      })
+      runId = workflowRun.id
+
+      // Fetch workflow and actions from database
+      const workflow = await prisma.workflow.findUnique({
+        where: { id: workflowId },
+        include: {
+          actions: {
+            orderBy: { order: 'asc' }
+          }
+        }
+      })
+
+      if (!workflow) {
+        throw new Error(`Workflow ${workflowId} not found`)
+      }
+
+      // Parse and validate LogicSpec if available
+      if (workflow.logicSpec) {
+        try {
+          console.log('🔧 Validating LogicSpec...')
+          const validationResult = this.logicCompiler.validateSpec(workflow.logicSpec)
+          
+          if (!validationResult.success) {
+            throw new Error(`Invalid LogicSpec: ${validationResult.errors.join(', ')}`)
+          }
+          
+          this.currentLogicSpec = validationResult.spec!
+          console.log(`✅ LogicSpec validated: ${this.currentLogicSpec.rules?.length || 0} rules, ${this.currentLogicSpec.loops?.length || 0} loops`)
+        } catch (error) {
+          console.warn('⚠️ LogicSpec validation failed, continuing without logic rules:', error)
+          this.currentLogicSpec = null
+        }
+      } else {
+        console.log('ℹ️ No LogicSpec found, executing without logic rules')
+      }
+
+      // Handle login if required
+      if (runConfig.requiresLogin && runConfig.loginConfig) {
+        console.log('🔐 Authenticating before workflow execution...')
+        this.loginAdapter = new LoginAgentAdapter()
+        
+        // Initialize browser and page (this would be injected in real usage)
+        if (!this.browser || !this.page) {
+          throw new Error('Browser and page must be initialized before running workflow')
+        }
+        
+        await this.loginAdapter.initialize(this.browser, this.page)
+        await this.loginAdapter.initLogin(this.page, runConfig.loginConfig)
+        authenticatedPage = await this.loginAdapter.getAuthenticatedPage(runConfig.loginConfig)
+        
+        console.log('✅ Authentication successful')
+      } else {
+        authenticatedPage = this.page
+      }
+
+      // Expand variables and prepare actions
+      const expandedActions = await this.expandVariables(workflow.actions, runConfig.variables)
+      console.log(`📋 Expanded ${expandedActions.length} actions from ${workflow.actions.length} base actions`)
+
+      // Execute actions with logic rules and loops
+      const stepLogs: RunLog[] = []
+      let successCount = 0
+      let failureCount = 0
+      let skippedCount = 0
+
+      // Process loops first if LogicSpec has loops
+      if (this.currentLogicSpec?.loops && this.currentLogicSpec.loops.length > 0) {
+        console.log(`🔄 Processing ${this.currentLogicSpec.loops.length} loops...`)
+        
+        for (const loop of this.currentLogicSpec.loops) {
+          const loopResult = await this.executeLoop(loop, expandedActions, authenticatedPage!, runConfig.variables, runId)
+          stepLogs.push(...loopResult.stepLogs)
+          successCount += loopResult.successCount
+          failureCount += loopResult.failureCount
+          skippedCount += loopResult.skippedCount
+        }
+      } else {
+        // Execute actions sequentially without loops
+        for (const action of expandedActions) {
+          try {
+            console.log(`🎯 Executing step: ${action.type} on ${action.selector}`)
+            
+            const stepLog = await this.executeStep(action, authenticatedPage!, runConfig.variables)
+            stepLogs.push(stepLog)
+
+          // Update database with step result
+          await prisma.workflowRunStep.create({
+            data: {
+              id: `step_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+              runId,
+              actionId: action.id,
+              status: stepLog.status.toUpperCase() as any,
+              startedAt: new Date(stepLog.startTime),
+              finishedAt: new Date(stepLog.endTime),
+              result: {
+                success: stepLog.status === 'success',
+                duration: stepLog.duration,
+                attempts: stepLog.attempts
+              },
+              error: stepLog.error,
+              logs: [stepLog],
+              metadata: stepLog.metadata
+            }
+          })
+
+          if (stepLog.status === 'success') {
+            successCount++
+          } else if (stepLog.status === 'failed') {
+            failureCount++
+          } else {
+            skippedCount++
+          }
+
+        } catch (error) {
+          console.error(`❌ Step execution failed:`, error)
+          failureCount++
+          
+          const errorLog: RunLog = {
+            stepId: `step_${Date.now()}`,
+            actionId: action.id,
+            status: 'failed',
+            startTime: Date.now(),
+            endTime: Date.now(),
+            duration: 0,
+            attempts: 1,
+            error: error instanceof Error ? error.message : 'Unknown error',
+            metadata: {
+              selector: action.selector,
+              strategy: 'primary',
+              confidence: 0,
+              fallbackUsed: false,
+              variables: runConfig.variables
+            }
+          }
+          
+          stepLogs.push(errorLog)
+        }
+      }
+
+      const endTime = Date.now()
+      const duration = endTime - startTime
+      const totalSteps = stepLogs.length
+      const successRate = totalSteps > 0 ? successCount / totalSteps : 0
+
+      // Determine final status
+      let finalStatus: 'success' | 'failed' | 'partial'
+      if (failureCount === 0) {
+        finalStatus = 'success'
+      } else if (successCount === 0) {
+        finalStatus = 'failed'
+      } else {
+        finalStatus = 'partial'
+      }
+
+      // Update workflow run status
+      await prisma.workflowRun.update({
+        where: { id: runId },
+        data: {
+          status: finalStatus.toUpperCase() as any,
+          finishedAt: new Date(endTime),
+          result: {
+            status: finalStatus,
+            summary: {
+              successCount,
+              failureCount,
+              skippedCount,
+              totalSteps,
+              successRate
+            }
+          },
+          logs: stepLogs
+        }
+      })
+
+      const result: WorkflowRunResult = {
+        runId,
+        workflowId,
+        status: finalStatus,
+        startTime,
+        endTime,
+        duration,
+        steps: stepLogs,
+        summary: {
+          successCount,
+          failureCount,
+          skippedCount,
+          totalSteps,
+          successRate
+        },
+        metadata: {
+          browser: await this.browser?.version() || 'unknown',
+          userAgent: await authenticatedPage?.evaluate(() => navigator.userAgent) || 'unknown',
+          loginRequired: runConfig.requiresLogin,
+          loginSuccess: runConfig.requiresLogin ? !!authenticatedPage : true,
+          variables: runConfig.variables
+        }
+      }
+
+      console.log(`✅ Workflow execution completed: ${finalStatus} (${successCount}/${totalSteps} successful)`)
+      return result
+    }
+    } catch (error) {
+      console.error('❌ Workflow execution failed:', error)
+      
+      const endTime = Date.now()
+      const duration = endTime - startTime
+
+      // Update workflow run with error
+      if (runId) {
+        await prisma.workflowRun.update({
+          where: { id: runId },
+          data: {
+            status: 'FAILED',
+            finishedAt: new Date(endTime),
+            error: error instanceof Error ? error.message : 'Unknown error',
+            result: {
+              status: 'failed',
+              error: error instanceof Error ? error.message : 'Unknown error'
+            }
+          }
+        })
+      }
+
+      const errorResult: WorkflowRunResult = {
+        runId,
+        workflowId,
+        status: 'failed',
+        startTime,
+        endTime,
+        duration,
+        steps: [],
+        summary: {
+          successCount: 0,
+          failureCount: 0,
+          skippedCount: 0,
+          totalSteps: 0,
+          successRate: 0
+        },
+        error: error instanceof Error ? error.message : 'Unknown error',
+        metadata: {
+          browser: await this.browser?.version() || 'unknown',
+          userAgent: await authenticatedPage?.evaluate(() => navigator.userAgent) || 'unknown',
+          loginRequired: runConfig.requiresLogin,
+          loginSuccess: false,
+          variables: runConfig.variables
+        }
+      }
+
+      return errorResult
+    }
+  }
+
+  /**
+   * Evaluate rules before step execution
+   */
+  private async evaluateRules(step: WorkflowAction, variables: Record<string, unknown>): Promise<RuleEvaluationResult[]> {
+    if (!this.currentLogicSpec?.rules) {
+      return []
+    }
+
+    const results: RuleEvaluationResult[] = []
+    const contextVariables = { ...variables, stepId: step.id, stepType: step.type }
+
+    for (const rule of this.currentLogicSpec.rules) {
+      if (!rule.enabled) {
+        continue
+      }
+
+      try {
+        const conditionResult = this.evaluateCondition(rule.condition, contextVariables)
+        const actionResult = await this.executeRuleAction(rule, conditionResult, step, variables)
+        
+        const evaluationResult: RuleEvaluationResult = {
+          ruleId: rule.id,
+          ruleName: rule.name,
+          condition: conditionResult,
+          action: {
+            type: rule.action.type,
+            executed: actionResult.executed,
+            result: actionResult.result
+          },
+          metadata: {
+            evaluatedAt: Date.now(),
+            variables: contextVariables
+          }
+        }
+
+        results.push(evaluationResult)
+        this.evaluatedRules.push(evaluationResult)
+
+        console.log(`📋 Rule "${rule.name}": condition=${conditionResult}, action=${rule.action.type}`)
+
+      } catch (error) {
+        console.error(`❌ Rule evaluation failed for "${rule.name}":`, error)
+      }
+    }
+
+    return results
+  }
+
+  /**
+   * Evaluate a rule condition
+   */
+  private evaluateCondition(condition: any, variables: Record<string, unknown>): boolean {
+    const { variable, operator, value } = condition
+    const variableValue = variables[variable]
+
+    if (variableValue === undefined) {
+      console.warn(`⚠️ Variable "${variable}" not found in context`)
+      return false
+    }
+
+    switch (operator) {
+      case 'eq':
+        return variableValue === value
+      case 'neq':
+        return variableValue !== value
+      case 'gt':
+        return Number(variableValue) > Number(value)
+      case 'gte':
+        return Number(variableValue) >= Number(value)
+      case 'lt':
+        return Number(variableValue) < Number(value)
+      case 'lte':
+        return Number(variableValue) <= Number(value)
+      case 'in':
+        return Array.isArray(value) && value.includes(variableValue)
+      case 'not_in':
+        return Array.isArray(value) && !value.includes(variableValue)
+      case 'contains':
+        return String(variableValue).includes(String(value))
+      case 'not_contains':
+        return !String(variableValue).includes(String(value))
+      default:
+        console.warn(`⚠️ Unsupported operator: ${operator}`)
+        return false
+    }
+  }
+
+  /**
+   * Execute rule action
+   */
+  private async executeRuleAction(rule: Rule, conditionResult: boolean, step: WorkflowAction, variables: Record<string, unknown>): Promise<{ executed: boolean; result?: any }> {
+    if (!conditionResult) {
+      return { executed: false }
+    }
+
+    switch (rule.action.type) {
+      case 'skip':
+        console.log(`⏭️ Rule "${rule.name}" triggered skip for step ${step.id}`)
+        return { executed: true, result: 'skipped' }
+      
+      case 'retry':
+        console.log(`🔄 Rule "${rule.name}" triggered retry for step ${step.id}`)
+        return { executed: true, result: 'retry_triggered' }
+      
+      case 'wait':
+        const waitTime = rule.action.value || 1000
+        console.log(`⏳ Rule "${rule.name}" triggered wait for ${waitTime}ms`)
+        await new Promise(resolve => setTimeout(resolve, Number(waitTime)))
+        return { executed: true, result: `waited_${waitTime}ms` }
+      
+      case 'skip_empty':
+        const isEmpty = this.isEmptyValue(variables[rule.condition.variable])
+        if (isEmpty) {
+          console.log(`⏭️ Rule "${rule.name}" triggered skip_empty for step ${step.id}`)
+          return { executed: true, result: 'skipped_empty' }
+        }
+        return { executed: false }
+      
+      case 'execute':
+        console.log(`✅ Rule "${rule.name}" triggered execute for step ${step.id}`)
+        return { executed: true, result: 'executed' }
+      
+      default:
+        console.warn(`⚠️ Unknown rule action type: ${rule.action.type}`)
+        return { executed: false }
+    }
+  }
+
+  /**
+   * Check if value is empty
+   */
+  private isEmptyValue(value: unknown): boolean {
+    if (value === null || value === undefined) return true
+    if (typeof value === 'string') return value.trim() === ''
+    if (Array.isArray(value)) return value.length === 0
+    if (typeof value === 'object') return Object.keys(value).length === 0
+    return false
+  }
+
+  /**
+   * Execute a loop with its actions
+   */
+  private async executeLoop(loop: Loop, actions: WorkflowAction[], page: Page, variables: Record<string, unknown>, runId: string): Promise<{
+    stepLogs: RunLog[]
+    successCount: number
+    failureCount: number
+    skippedCount: number
+  }> {
+    const stepLogs: RunLog[] = []
+    let successCount = 0
+    let failureCount = 0
+    let skippedCount = 0
+
+    const loopVariable = variables[loop.variable]
+    if (!Array.isArray(loopVariable)) {
+      console.error(`❌ Loop variable "${loop.variable}" is not an array`)
+      return { stepLogs, successCount, failureCount, skippedCount }
+    }
+
+    console.log(`🔄 Executing loop "${loop.name}" with ${loopVariable.length} iterations`)
+
+    for (let i = 0; i < loopVariable.length; i++) {
+      const currentValue = loopVariable[i]
+      const loopContext: LoopContext = {
+        loopId: loop.id,
+        loopName: loop.name,
+        variable: loop.variable,
+        iterator: loop.iterator,
+        currentValue,
+        currentIndex: i,
+        totalIterations: loopVariable.length,
+        metadata: {
+          loopStartTime: Date.now(),
+          iteration: i + 1
+        }
+      }
+
+      this.loopContexts.push(loopContext)
+      console.log(`🔄 Loop iteration ${i + 1}/${loopVariable.length}: ${loop.iterator} = ${currentValue}`)
+
+      // Create loop variables context
+      const loopVariables = {
+        ...variables,
+        [loop.iterator]: currentValue,
+        [`${loop.iterator}_index`]: i,
+        [`${loop.iterator}_length`]: loopVariable.length
+      }
+
+      // Execute loop actions
+      for (const actionId of loop.actions) {
+        const action = actions.find(a => a.id === actionId)
+        if (!action) {
+          console.warn(`⚠️ Loop action "${actionId}" not found`)
+          continue
+        }
+
+        try {
+          const stepLog = await this.executeStep(action, page, loopVariables)
+          stepLogs.push(stepLog)
+
+          // Update database with loop step result
+          await prisma.workflowRunStep.create({
+            data: {
+              id: `step_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+              runId,
+              actionId: action.id,
+              status: stepLog.status.toUpperCase() as any,
+              startedAt: new Date(stepLog.startTime),
+              finishedAt: new Date(stepLog.endTime),
+              result: {
+                success: stepLog.status === 'success',
+                duration: stepLog.duration,
+                attempts: stepLog.attempts,
+                loopContext
+              },
+              error: stepLog.error,
+              logs: [stepLog],
+              metadata: {
+                ...stepLog.metadata,
+                loopContext
+              }
+            }
+          })
+
+          if (stepLog.status === 'success') {
+            successCount++
+          } else if (stepLog.status === 'failed') {
+            failureCount++
+          } else {
+            skippedCount++
+          }
+
+        } catch (error) {
+          console.error(`❌ Loop step execution failed:`, error)
+          failureCount++
+        }
+      }
+
+      // Check break condition
+      if (loop.breakCondition) {
+        const shouldBreak = this.evaluateCondition(loop.breakCondition, loopVariables)
+        if (shouldBreak) {
+          console.log(`🛑 Loop break condition met, stopping at iteration ${i + 1}`)
+          break
+        }
+      }
+
+      // Check max iterations
+      if (loop.maxIterations && i >= loop.maxIterations - 1) {
+        console.log(`🛑 Loop max iterations (${loop.maxIterations}) reached`)
+        break
+      }
+    }
+
+    return { stepLogs, successCount, failureCount, skippedCount }
+  }
+
+  /**
+   * Execute a single workflow step
+   */
+  async executeStep(step: WorkflowAction, page: Page, variables: Record<string, unknown>): Promise<RunLog> {
+    const stepStartTime = Date.now()
+    const stepId = `step_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+    let attempts = 0
+    let lastError: string | undefined
+    let fallbackUsed = false
+
+    // Evaluate rules before step execution
+    const ruleResults = await this.evaluateRules(step, variables)
+    
+    // Check if any rule triggered skip
+    const skipRule = ruleResults.find(r => r.action.type === 'skip' && r.action.executed)
+    if (skipRule) {
+      console.log(`⏭️ Step ${step.id} skipped due to rule: ${skipRule.ruleName}`)
+      return {
+        stepId,
+        actionId: step.id,
+        status: 'skipped',
+        startTime: stepStartTime,
+        endTime: Date.now(),
+        duration: 0,
+        attempts: 0,
+        metadata: {
+          selector: step.selector,
+          strategy: 'rule_skip',
+          confidence: 1.0,
+          fallbackUsed: false,
+          variables,
+          ruleResults
+        }
+      }
+    }
+
+    // Apply variable substitution to step
+    const processedStep = this.substituteVariables(step, variables)
+
+    // Retry logic with fallback
+    while (attempts < (processedStep.retryCount || 3)) {
+      attempts++
+      
+      try {
+        console.log(`🎯 Attempt ${attempts} for step ${processedStep.type} on ${processedStep.selector}`)
+
+        // Wait for element if specified
+        if (processedStep.waitFor) {
+          await this.waitPolicy.waitFor(page, processedStep.waitFor, processedStep.timeout || 30000)
+        }
+
+        // Execute the action
+        await this.executeAction(processedStep, page)
+
+        // Wait for network idle if needed
+        if (processedStep.type === 'navigate') {
+          await page.waitForLoadState?.('networkidle') || 
+                await new Promise(resolve => setTimeout(resolve, 2000))
+        }
+
+        const stepEndTime = Date.now()
+        const duration = stepEndTime - stepStartTime
+
+        console.log(`✅ Step ${processedStep.type} completed successfully`)
+
+        return {
+          stepId,
+          actionId: processedStep.id,
+          status: 'success',
+          startTime: stepStartTime,
+          endTime: stepEndTime,
+          duration,
+          attempts,
+          metadata: {
+            selector: processedStep.selector,
+            strategy: 'primary',
+            confidence: 1.0,
+            fallbackUsed,
+            variables,
+            ruleResults
+          }
+        }
+
+      } catch (error) {
+        lastError = error instanceof Error ? error.message : 'Unknown error'
+        console.warn(`⚠️ Attempt ${attempts} failed for step ${processedStep.type}: ${lastError}`)
+
+        // Try fallback selector if available
+        if (attempts === 1 && processedStep.selector) {
+          try {
+            const fallbackSelector = await this.selectorFallback.findAlternativeSelector(page, processedStep.selector)
+            if (fallbackSelector) {
+              console.log(`🔄 Trying fallback selector: ${fallbackSelector}`)
+              processedStep.selector = fallbackSelector
+              fallbackUsed = true
+              continue
+            }
+          } catch (fallbackError) {
+            console.warn('Fallback selector failed:', fallbackError)
+          }
+        }
+
+        // Wait before retry
+        if (attempts < (processedStep.retryCount || 3)) {
+          const delay = this.retryPolicy.calculateDelay(attempts)
+          console.log(`⏳ Waiting ${delay}ms before retry...`)
+          await new Promise(resolve => setTimeout(resolve, delay))
+        }
+      }
+    }
+
+    // All attempts failed
+    const stepEndTime = Date.now()
+    const duration = stepEndTime - stepStartTime
+
+    console.error(`❌ Step ${processedStep.type} failed after ${attempts} attempts: ${lastError}`)
+
+    return {
+      stepId,
+      actionId: processedStep.id,
+      status: 'failed',
+      startTime: stepStartTime,
+      endTime: stepEndTime,
+      duration,
+      attempts,
+      error: lastError,
+      metadata: {
+        selector: processedStep.selector,
+        strategy: fallbackUsed ? 'fallback' : 'primary',
+        confidence: 0,
+        fallbackUsed,
+        variables,
+        ruleResults
+      }
+    }
+  }
+
+  /**
+   * Execute a single action on the page
+   */
+  private async executeAction(action: WorkflowAction, page: Page): Promise<void> {
+    switch (action.type) {
+      case 'click':
+        await page.click(action.selector)
+        break
+      
+      case 'type':
+        await page.type(action.selector, action.value || '')
+        break
+      
+      case 'select':
+        await page.select(action.selector, action.value || '')
+        break
+      
+      case 'navigate':
+        await page.goto(action.url || '', { waitUntil: 'networkidle2' })
+        break
+      
+      case 'scroll':
+        if (action.coordinates) {
+          await page.mouse.wheel({ deltaX: action.coordinates.x, deltaY: action.coordinates.y })
+        }
+        break
+      
+      case 'wait':
+        await page.waitForTimeout(action.timeout || 1000)
+        break
+      
+      case 'hover':
+        await page.hover(action.selector)
+        break
+      
+      case 'double_click':
+        await page.click(action.selector, { clickCount: 2 })
+        break
+      
+      case 'right_click':
+        await page.click(action.selector, { button: 'right' })
+        break
+      
+      case 'screenshot':
+        const screenshot = await page.screenshot({ fullPage: true })
+        // Store screenshot in metadata or return as base64
+        break
+      
+      default:
+        throw new Error(`Unsupported action type: ${action.type}`)
+    }
+  }
+
+  /**
+   * Expand variables in workflow actions
+   */
+  private async expandVariables(actions: any[], variables: Record<string, unknown>): Promise<WorkflowAction[]> {
+    const expandedActions: WorkflowAction[] = []
+
+    for (const action of actions) {
+      const actionData = action.action as WorkflowAction
+      
+      // Check if any variable is a list
+      const listVariables = Object.entries(variables).filter(([_, value]) => Array.isArray(value))
+      
+      if (listVariables.length > 0) {
+        // Create loop over list variables
+        const [listKey, listValues] = listVariables[0]
+        const listArray = listValues as unknown[]
+        
+        for (let i = 0; i < listArray.length; i++) {
+          const loopVariables = {
+            ...variables,
+            [listKey]: listArray[i],
+            [`${listKey}_index`]: i,
+            [`${listKey}_length`]: listArray.length
+          }
+          
+          const expandedAction = this.substituteVariables(actionData, loopVariables)
+          expandedActions.push(expandedAction)
+        }
+      } else {
+        // No lists, just substitute variables
+        const expandedAction = this.substituteVariables(actionData, variables)
+        expandedActions.push(expandedAction)
+      }
+    }
+
+    return expandedActions
+  }
+
+  /**
+   * Substitute variables in action properties
+   */
+  private substituteVariables(action: WorkflowAction, variables: Record<string, unknown>): WorkflowAction {
+    const substitute = (value: string): string => {
+      return value.replace(/\{\{(\w+)\}\}/g, (match, varName) => {
+        const varValue = variables[varName]
+        return varValue !== undefined ? String(varValue) : match
+      })
+    }
+
+    return {
+      ...action,
+      selector: substitute(action.selector),
+      value: action.value ? substitute(action.value) : action.value,
+      url: action.url ? substitute(action.url) : action.url,
+      waitFor: action.waitFor ? substitute(action.waitFor) : action.waitFor
+    }
+  }
+
+  /**
+   * Initialize browser and page
+   */
+  async initialize(browser: Browser, page: Page): Promise<void> {
+    this.browser = browser
+    this.page = page
+    console.log('🎬 AgentRunner initialized with browser and page')
+  }
+
+  /**
+   * Clean up resources
+   */
+  async cleanup(): Promise<void> {
+    if (this.loginAdapter) {
+      await this.loginAdapter.cleanup()
+      this.loginAdapter = null
+    }
+    
+    this.browser = null
+    this.page = null
+    
+    console.log('🧹 AgentRunner cleaned up')
+  }
+}

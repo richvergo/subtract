@@ -4,17 +4,18 @@ import { useState } from "react"
 import useSWR from "swr"
 import Link from "next/link"
 
-// Note: Agents represent workflows (recorded automation templates)
+// Enterprise Workflow System
+// Workflows represent enterprise-grade automation templates built with Puppeteer
 // Tasks represent executions (running those workflows with specific parameters)
-// Users cannot run Agents directly - they must create Tasks to execute workflows
+// Users cannot run Workflows directly - they must create Tasks to execute workflows
 //
-// Agent Lifecycle Status:
+// Workflow Lifecycle Status:
 // - DRAFT: Initial state, needs review and approval
 // - ACTIVE: Approved and ready for execution (displayed as "Live")
 // - REJECTED: Rejected during review process
 // - INACTIVE: Manually deactivated (legacy state)
 //
-// New Agent Fields (from golden path implementation):
+// Enterprise Workflow Fields:
 // - recordingUrl: URL to video recording
 // - audioUrl: URL to extracted audio (optional)
 // - llmSummary: AI-generated workflow summary
@@ -333,10 +334,11 @@ export default function AgentsPage() {
           margin: 0,
           color: "#333"
         }}>
-          Agents
+          Workflows
         </h1>
-        <Link href="/agents/create">
-          <button style={{
+        <button 
+          onClick={() => alert('Workflow creation is now handled through the enterprise Puppeteer stack. Use the API endpoints to create workflows programmatically.')}
+          style={{
             background: "#007bff", 
             color: "#fff",
             padding: "12px 24px", 
@@ -357,9 +359,8 @@ export default function AgentsPage() {
             e.currentTarget.style.backgroundColor = "#007bff"
           }}>
             <span>+</span>
-            Create Agent
+            Create Workflow
           </button>
-        </Link>
       </div>
 
       {agents.length === 0 ? (
@@ -377,17 +378,18 @@ export default function AgentsPage() {
             margin: "0 0 8px 0",
             color: "#495057"
           }}>
-            No agents yet
+            No workflows yet
           </h3>
           <p style={{ 
             color: "#6c757d", 
             margin: "0 0 24px 0",
             fontSize: "14px"
           }}>
-            Click Create Agent to add your first one.
+            Workflows are created through the enterprise Puppeteer stack.
           </p>
-          <Link href="/agents/create">
-            <button style={{
+          <button 
+            onClick={() => alert('Workflow creation is now handled through the enterprise Puppeteer stack. Use the API endpoints to create workflows programmatically.')}
+            style={{
               background: "#007bff", 
               color: "#fff",
               padding: "12px 24px", 
@@ -404,9 +406,8 @@ export default function AgentsPage() {
             onMouseLeave={(e) => {
               e.currentTarget.style.backgroundColor = "#007bff"
             }}>
-              Create Your First Agent
+              Create Your First Workflow
             </button>
-          </Link>
         </div>
       ) : (
         <div style={{

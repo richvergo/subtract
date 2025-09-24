@@ -86,7 +86,7 @@ npx prisma db execute --schema=./prisma/schema.prisma --stdin <<< "SELECT COUNT(
 ### **Agent Management**
 - ✅ Create, configure, and manage agents
 - ✅ Workflow recording and playback
-- ✅ AI-powered summarization
+- ✅ Enterprise logic compilation
 - ✅ Agent execution and monitoring
 - ✅ Login-agent associations
 

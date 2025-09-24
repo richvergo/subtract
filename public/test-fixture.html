@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Fixture - Workflow Smoke Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .form-section {
+            margin-bottom: 25px;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            background-color: #fafafa;
+        }
+        .form-section h3 {
+            margin-top: 0;
+            color: #555;
+        }
+        input, select, textarea, button {
+            width: 100%;
+            padding: 10px;
+            margin: 5px 0;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            box-sizing: border-box;
+            font-size: 14px;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        button:disabled {
+            background-color: #6c757d;
+            cursor: not-allowed;
+        }
+        .success {
+            color: #28a745;
+            font-weight: bold;
+        }
+        .error {
+            color: #dc3545;
+            font-weight: bold;
+        }
+        .info {
+            color: #17a2b8;
+        }
+        .hidden {
+            display: none;
+        }
+        .step-indicator {
+            display: flex;
+            justify-content: space-between;
+            margin: 20px 0;
+        }
+        .step {
+            flex: 1;
+            text-align: center;
+            padding: 10px;
+            margin: 0 5px;
+            border-radius: 4px;
+            background-color: #e9ecef;
+            color: #6c757d;
+        }
+        .step.active {
+            background-color: #007bff;
+            color: white;
+        }
+        .step.completed {
+            background-color: #28a745;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧪 Workflow Test Fixture</h1>
+        <p class="info">This page is used for end-to-end workflow smoke testing. It provides various UI elements that can be interacted with programmatically.</p>
+        
+        <div class="step-indicator">
+            <div class="step" id="step-1">1. Navigation</div>
+            <div class="step" id="step-2">2. Form Fill</div>
+            <div class="step" id="step-3">3. Button Click</div>
+            <div class="step" id="step-4">4. Validation</div>
+        </div>
+
+        <!-- Navigation Section -->
+        <div class="form-section">
+            <h3>📍 Navigation Test</h3>
+            <p>Test navigation and page loading functionality.</p>
+            <button id="nav-button" onclick="handleNavigation()">Navigate to Next Section</button>
+            <div id="nav-result" class="hidden"></div>
+        </div>
+
+        <!-- Form Section -->
+        <div class="form-section">
+            <h3>📝 Form Interaction Test</h3>
+            <p>Test form filling and input handling.</p>
+            
+            <label for="test-input">Test Input Field:</label>
+            <input type="text" id="test-input" placeholder="Enter test data..." data-testid="test-input">
+            
+            <label for="test-select">Test Select Field:</label>
+            <select id="test-select" data-testid="test-select">
+                <option value="">Select an option...</option>
+                <option value="option1">Option 1</option>
+                <option value="option2">Option 2</option>
+                <option value="option3">Option 3</option>
+            </select>
+            
+            <label for="test-textarea">Test Textarea:</label>
+            <textarea id="test-textarea" placeholder="Enter multiline text..." data-testid="test-textarea"></textarea>
+            
+            <button id="form-submit" onclick="handleFormSubmit()" data-testid="form-submit">Submit Form</button>
+            <div id="form-result" class="hidden"></div>
+        </div>
+
+        <!-- Button Interaction Section -->
+        <div class="form-section">
+            <h3>🖱️ Button Interaction Test</h3>
+            <p>Test various button interactions and event handling.</p>
+            
+            <button id="primary-button" onclick="handlePrimaryClick()" data-testid="primary-button">Primary Action</button>
+            <button id="secondary-button" onclick="handleSecondaryClick()" data-testid="secondary-button">Secondary Action</button>
+            <button id="toggle-button" onclick="handleToggle()" data-testid="toggle-button">Toggle State</button>
+            
+            <div id="button-results" class="hidden">
+                <p>Button interaction results will appear here...</p>
+            </div>
+        </div>
+
+        <!-- Validation Section -->
+        <div class="form-section">
+            <h3>✅ Validation Test</h3>
+            <p>Test validation logic and error handling.</p>
+            
+            <label for="email-input">Email Validation:</label>
+            <input type="email" id="email-input" placeholder="test@example.com" data-testid="email-input">
+            
+            <label for="number-input">Number Validation:</label>
+            <input type="number" id="number-input" placeholder="Enter a number" data-testid="number-input">
+            
+            <button id="validate-button" onclick="handleValidation()" data-testid="validate-button">Validate Inputs</button>
+            
+            <div id="validation-results" class="hidden"></div>
+        </div>
+
+        <!-- Results Section -->
+        <div class="form-section">
+            <h3>📊 Test Results</h3>
+            <div id="test-summary">
+                <p>Test results will be displayed here...</p>
+            </div>
+            <button id="reset-button" onclick="resetTest()" data-testid="reset-button">Reset Test</button>
+        </div>
+    </div>
+
+    <script>
+        let testState = {
+            navigationCompleted: false,
+            formCompleted: false,
+            buttonCompleted: false,
+            validationCompleted: false,
+            results: []
+        };
+
+        function updateStepIndicator() {
+            const steps = ['step-1', 'step-2', 'step-3', 'step-4'];
+            steps.forEach((stepId, index) => {
+                const step = document.getElementById(stepId);
+                step.className = 'step';
+                
+                if (testState.navigationCompleted && index === 0) {
+                    step.className += ' completed';
+                } else if (testState.formCompleted && index === 1) {
+                    step.className += ' completed';
+                } else if (testState.buttonCompleted && index === 2) {
+                    step.className += ' completed';
+                } else if (testState.validationCompleted && index === 3) {
+                    step.className += ' completed';
+                }
+            });
+        }
+
+        function handleNavigation() {
+            testState.navigationCompleted = true;
+            testState.results.push('Navigation test completed');
+            
+            document.getElementById('nav-result').innerHTML = '<p class="success">✅ Navigation successful</p>';
+            document.getElementById('nav-result').classList.remove('hidden');
+            
+            updateStepIndicator();
+            updateTestSummary();
+        }
+
+        function handleFormSubmit() {
+            const input = document.getElementById('test-input').value;
+            const select = document.getElementById('test-select').value;
+            const textarea = document.getElementById('test-textarea').value;
+            
+            if (input && select && textarea) {
+                testState.formCompleted = true;
+                testState.results.push('Form submission completed');
+                
+                document.getElementById('form-result').innerHTML = `
+                    <p class="success">✅ Form submitted successfully</p>
+                    <p><strong>Input:</strong> ${input}</p>
+                    <p><strong>Select:</strong> ${select}</p>
+                    <p><strong>Textarea:</strong> ${textarea}</p>
+                `;
+                document.getElementById('form-result').classList.remove('hidden');
+                
+                updateStepIndicator();
+                updateTestSummary();
+            } else {
+                document.getElementById('form-result').innerHTML = '<p class="error">❌ Please fill in all form fields</p>';
+                document.getElementById('form-result').classList.remove('hidden');
+            }
+        }
+
+        function handlePrimaryClick() {
+            testState.buttonCompleted = true;
+            testState.results.push('Primary button click completed');
+            
+            document.getElementById('button-results').innerHTML = '<p class="success">✅ Primary button clicked successfully</p>';
+            document.getElementById('button-results').classList.remove('hidden');
+            
+            updateStepIndicator();
+            updateTestSummary();
+        }
+
+        function handleSecondaryClick() {
+            testState.results.push('Secondary button click completed');
+            
+            const results = document.getElementById('button-results');
+            results.innerHTML += '<p class="info">ℹ️ Secondary button clicked</p>';
+            results.classList.remove('hidden');
+        }
+
+        function handleToggle() {
+            testState.results.push('Toggle button clicked');
+            
+            const button = document.getElementById('toggle-button');
+            const isToggled = button.classList.contains('toggled');
+            
+            if (isToggled) {
+                button.classList.remove('toggled');
+                button.textContent = 'Toggle State';
+                button.style.backgroundColor = '#007bff';
+            } else {
+                button.classList.add('toggled');
+                button.textContent = 'Toggled!';
+                button.style.backgroundColor = '#28a745';
+            }
+            
+            const results = document.getElementById('button-results');
+            results.innerHTML += '<p class="info">ℹ️ Toggle state changed</p>';
+            results.classList.remove('hidden');
+        }
+
+        function handleValidation() {
+            const email = document.getElementById('email-input').value;
+            const number = document.getElementById('number-input').value;
+            
+            let isValid = true;
+            let errors = [];
+            
+            if (email && !email.includes('@')) {
+                isValid = false;
+                errors.push('Invalid email format');
+            }
+            
+            if (number && isNaN(parseInt(number))) {
+                isValid = false;
+                errors.push('Invalid number format');
+            }
+            
+            if (isValid && (email || number)) {
+                testState.validationCompleted = true;
+                testState.results.push('Validation completed successfully');
+                
+                document.getElementById('validation-results').innerHTML = '<p class="success">✅ Validation passed</p>';
+                document.getElementById('validation-results').classList.remove('hidden');
+                
+                updateStepIndicator();
+                updateTestSummary();
+            } else {
+                document.getElementById('validation-results').innerHTML = `
+                    <p class="error">❌ Validation failed</p>
+                    ${errors.map(error => `<p class="error">- ${error}</p>`).join('')}
+                `;
+                document.getElementById('validation-results').classList.remove('hidden');
+            }
+        }
+
+        function updateTestSummary() {
+            const summary = document.getElementById('test-summary');
+            const completedTests = [
+                testState.navigationCompleted,
+                testState.formCompleted,
+                testState.buttonCompleted,
+                testState.validationCompleted
+            ].filter(Boolean).length;
+            
+            const totalTests = 4;
+            
+            summary.innerHTML = `
+                <p><strong>Test Progress:</strong> ${completedTests}/${totalTests} completed</p>
+                <p><strong>Results:</strong></p>
+                <ul>
+                    ${testState.results.map(result => `<li>${result}</li>`).join('')}
+                </ul>
+                ${completedTests === totalTests ? '<p class="success">🎉 All tests completed successfully!</p>' : ''}
+            `;
+        }
+
+        function resetTest() {
+            testState = {
+                navigationCompleted: false,
+                formCompleted: false,
+                buttonCompleted: false,
+                validationCompleted: false,
+                results: []
+            };
+            
+            // Reset form fields
+            document.getElementById('test-input').value = '';
+            document.getElementById('test-select').value = '';
+            document.getElementById('test-textarea').value = '';
+            document.getElementById('email-input').value = '';
+            document.getElementById('number-input').value = '';
+            
+            // Reset toggle button
+            const toggleButton = document.getElementById('toggle-button');
+            toggleButton.classList.remove('toggled');
+            toggleButton.textContent = 'Toggle State';
+            toggleButton.style.backgroundColor = '#007bff';
+            
+            // Hide results
+            document.getElementById('nav-result').classList.add('hidden');
+            document.getElementById('form-result').classList.add('hidden');
+            document.getElementById('button-results').classList.add('hidden');
+            document.getElementById('validation-results').classList.add('hidden');
+            
+            updateStepIndicator();
+            updateTestSummary();
+        }
+
+        // Initialize the page
+        updateStepIndicator();
+        updateTestSummary();
+
+        // Add some test data for automation
+        document.getElementById('test-input').value = 'Smoke test data';
+        document.getElementById('test-select').value = 'option2';
+        document.getElementById('test-textarea').value = 'This is test textarea content for the smoke test.';
+        document.getElementById('email-input').value = 'test@example.com';
+        document.getElementById('number-input').value = '42';
+    </script>
+</body>
+</html>

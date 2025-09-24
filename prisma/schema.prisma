@@ -17,6 +17,7 @@ model User {
   logins       Login[]
   memberships  Membership[]
   tasks        Task[]
+  workflows    Workflow[]
 }
 
 model Entity {
@@ -226,4 +227,91 @@ model ExecutionMetrics {
   successRate     Float
   performanceScore Float
   createdAt       DateTime @default(now())
+}
+
+// New Enterprise Workflow Models
+model Workflow {
+  id            String        @id @default(cuid())
+  name          String
+  description   String?
+  status        WorkflowStatus @default(DRAFT)
+  version       String        @default("1.0.0")
+  requiresLogin Boolean       @default(false)
+  loginConfig   Json?         // Encrypted LoginConfig JSON
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  ownerId       String
+  logicSpec     Json          // LogicSpec JSON
+  metadata      Json?         // Additional metadata
+  owner         User          @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  actions       WorkflowAction[]
+  variables     WorkflowVariable[]
+  runs          WorkflowRun[]
+}
+
+model WorkflowAction {
+  id         String   @id @default(cuid())
+  workflowId String
+  action     Json     // Action JSON
+  order      Int
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  workflow   Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+}
+
+model WorkflowVariable {
+  id         String   @id @default(cuid())
+  workflowId String
+  variable   Json     // VariableDef JSON
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  workflow   Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+}
+
+model WorkflowRun {
+  id         String        @id @default(cuid())
+  workflowId String
+  status     RunStepStatus @default(PENDING)
+  startedAt  DateTime      @default(now())
+  finishedAt DateTime?
+  variables  Json?         // Variables used in this run
+  result     Json?         // Run result
+  error      String?       // Error message if failed
+  logs       Json?         // Array of RunLog JSON
+  metadata   Json?         // Additional metadata
+  workflow   Workflow      @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  steps      WorkflowRunStep[]
+}
+
+model WorkflowRunStep {
+  id         String        @id @default(cuid())
+  runId      String
+  actionId   String
+  status     RunStepStatus @default(PENDING)
+  startedAt  DateTime      @default(now())
+  finishedAt DateTime?
+  result     Json?         // Step result
+  error      String?       // Error message if failed
+  logs       Json?         // Array of RunLog JSON
+  metadata   Json?         // Additional metadata
+  run        WorkflowRun   @relation(fields: [runId], references: [id], onDelete: Cascade)
+}
+
+// New Enums
+enum WorkflowStatus {
+  DRAFT
+  ACTIVE
+  PAUSED
+  ARCHIVED
+  ERROR
+  TESTING
+}
+
+enum RunStepStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+  SKIPPED
+  RETRYING
 }

@@ -136,7 +136,7 @@
 
 **Steps**:
 1. From agents list, click "Create Agent" button
-2. Navigate to `/agents/create`
+2. Workflow creation is handled through enterprise Puppeteer stack APIs
 3. Fill in form fields:
    - **Agent Name**: "Test Automation Agent"
    - **Purpose Prompt**: "Automate form filling and data submission on test websites"
@@ -393,7 +393,7 @@
 4. Click "Add Login" quick action button
 
 **Expected Results**:
-- ✅ "Create Agent" button navigates to `/agents/create`
+- ✅ "Create Agent" button shows enterprise workflow creation info
 - ✅ "Add Login" button navigates to `/logins`
 - ✅ Navigation works correctly
 - ✅ Buttons have appropriate styling and hover effects
@@ -411,7 +411,7 @@
 1. Complete Test 1.3 (logout successfully)
 2. Try to access `/agents` directly in browser
 3. Try to access `/logins` directly in browser
-4. Try to access `/agents/create` directly
+4. Workflow creation is handled through enterprise APIs
 
 **Expected Results**:
 - ✅ All protected routes redirect to login page
@@ -450,7 +450,7 @@
 **Objective**: Verify error handling for invalid file uploads
 
 **Steps**:
-1. Navigate to `/agents/create`
+1. Access workflow creation through enterprise APIs
 2. Try to upload an invalid file type (e.g., .txt file) for recording
 3. Try to upload a very large file
 4. Observe error messages

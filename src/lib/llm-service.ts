@@ -20,22 +20,72 @@ export class LLMService {
   /**
    * Generate workflow summary - MVP version with mock data
    */
-  async summarizeWorkflow(agentConfig: AgentConfig, _eventLog: unknown[]): Promise<string> {
+  async summarizeWorkflow(agentConfig: AgentConfig | any, _eventLog: unknown[]): Promise<string> {
     console.log('🤖 Generating workflow summary (MVP mock)');
+    console.log('🤖 agentConfig type:', typeof agentConfig);
+    console.log('🤖 agentConfig keys:', agentConfig && typeof agentConfig === 'object' ? Object.keys(agentConfig) : 'N/A');
     
-    // Simple mock summary for MVP
-    const stepCount = agentConfig.length;
-    const hasLogin = agentConfig.some(step => step.action === 'goto');
-    const hasInput = agentConfig.some(step => step.action === 'type');
-    const hasClick = agentConfig.some(step => step.action === 'click');
+    // Handle both old array format and new enhanced object format
+    let summary = '';
     
-    let summary = `I've analyzed your ${stepCount}-step workflow. `;
+    if (Array.isArray(agentConfig)) {
+      // Old format: array of steps
+      const stepCount = agentConfig.length;
+      const hasLogin = agentConfig.some(step => step.action === 'goto');
+      const hasInput = agentConfig.some(step => step.action === 'type');
+      const hasClick = agentConfig.some(step => step.action === 'click');
+      
+      summary = `I've analyzed your ${stepCount}-step workflow. `;
+      
+      if (hasLogin) summary += 'The workflow starts by navigating to a login page. ';
+      if (hasInput) summary += 'It includes filling out form fields. ';
+      if (hasClick) summary += 'It involves clicking buttons to submit forms. ';
+      
+    } else if (agentConfig && typeof agentConfig === 'object') {
+      // Check if this is the new enhanced format with capturedActions
+      if ('capturedActions' in agentConfig) {
+        // New enhanced format: object with capturedActions and metadata
+        const actions = agentConfig.capturedActions || [];
+        const workflowSteps = agentConfig.captureSession?.metadata?.workflowSteps || [];
+        const windowSwitches = agentConfig.captureSession?.metadata?.windowSwitches || [];
+        const fileOperations = agentConfig.captureSession?.metadata?.fileOperations || [];
+        
+        summary = `I've analyzed your workflow recording. `;
+        summary += `Captured ${actions.length} actions, `;
+        summary += `${workflowSteps.length} workflow steps, `;
+        
+        if (windowSwitches.length > 0) {
+          summary += `and ${windowSwitches.length} application switches. `;
+        }
+        
+        if (fileOperations.length > 0) {
+          summary += `The workflow includes ${fileOperations.length} file operations. `;
+        }
+        
+        // Analyze action types
+        const actionTypes = actions.reduce((acc: any, action: any) => {
+          acc[action.type] = (acc[action.type] || 0) + 1;
+          return acc;
+        }, {});
+        
+        if (actionTypes.click) {
+          summary += 'It involves clicking buttons and elements. ';
+        }
+        if (actionTypes.window_switch) {
+          summary += 'The workflow spans multiple applications. ';
+        }
+        if (actionTypes.download || actionTypes.file_operation) {
+          summary += 'It includes file download or upload operations. ';
+        }
+      } else {
+        // Fallback for other object formats
+        summary = 'I\'ve analyzed your workflow recording. The automation is ready to run.';
+      }
+    } else {
+      summary = 'I\'ve analyzed your workflow recording. The automation is ready to run.';
+    }
     
-    if (hasLogin) summary += 'The workflow starts by navigating to a login page. ';
-    if (hasInput) summary += 'It includes filling out form fields. ';
-    if (hasClick) summary += 'It involves clicking buttons to submit forms. ';
-    
-    summary += 'The automation is ready to run and should work reliably.';
+    summary += ' The automation is ready to run and should work reliably.';
     
     return summary;
   }
@@ -43,20 +93,39 @@ export class LLMService {
   /**
    * Annotate workflow with intents - MVP version
    */
-  async annotateWorkflow(agentConfig: AgentConfig): Promise<AgentIntents> {
+  async annotateWorkflow(agentConfig: AgentConfig | any): Promise<AgentIntents> {
     console.log('🤖 Annotating workflow with intents (MVP mock)');
     
-    // Simple mock intents for MVP
-    return agentConfig.map((step, index) => ({
-      action: step.action,
-      intent: this.getMockIntent(step.action),
-      stepIndex: index,
-      selector: 'selector' in step ? step.selector : undefined,
-      metadata: {
-        confidence: 0.9,
-        reasoning: `Step ${index + 1}: ${step.action} action`
-      }
-    }));
+    // Handle both old array format and new enhanced object format
+    if (Array.isArray(agentConfig)) {
+      // Old format: array of steps
+      return agentConfig.map((step, index) => ({
+        action: step.action,
+        intent: this.getMockIntent(step.action),
+        stepIndex: index,
+        selector: 'selector' in step ? step.selector : undefined,
+        metadata: {
+          confidence: 0.9,
+          reasoning: `Step ${index + 1}: ${step.action} action`
+        }
+      }));
+    } else if (agentConfig && typeof agentConfig === 'object' && 'capturedActions' in agentConfig) {
+      // New enhanced format: convert captured actions to intents
+      const actions = agentConfig.capturedActions || [];
+      return actions.map((action: any, index: number) => ({
+        action: action.type || 'unknown',
+        intent: this.getMockIntent(action.type || 'unknown'),
+        stepIndex: index,
+        selector: action.selector || undefined,
+        metadata: {
+          confidence: 0.8,
+          reasoning: `Captured action: ${action.type} at ${action.timestamp}ms`
+        }
+      }));
+    } else {
+      // Fallback: return empty array
+      return [];
+    }
   }
 
   /**
@@ -179,7 +248,16 @@ export class LLMService {
       'click': 'Click on an element',
       'type': 'Type text into an input field',
       'wait': 'Wait for a specified time',
-      'screenshot': 'Take a screenshot'
+      'screenshot': 'Take a screenshot',
+      'scroll': 'Scroll the page or element',
+      'hover': 'Hover over an element',
+      'focus': 'Focus on an element',
+      'blur': 'Remove focus from an element',
+      'navigation': 'Navigate to a new page',
+      'download': 'Download a file',
+      'file_operation': 'Perform a file operation',
+      'window_switch': 'Switch between applications',
+      'external_action': 'Perform an action in an external application'
     };
     
     return intents[action] || `Perform ${action} action`;

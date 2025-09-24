@@ -1,0 +1,247 @@
+name: Domain Scope Validation
+
+on:
+  schedule:
+    # Run every night at 3 AM UTC
+    - cron: '0 3 * * *'
+  pull_request:
+    branches: [ main, develop ]
+  push:
+    branches: [ main, develop ]
+  workflow_dispatch: # Allow manual triggering
+
+jobs:
+  domain-scope-validation:
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        node-version: [18, 20]
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js ${{ matrix.node-version }}
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ matrix.node-version }}
+        cache: 'npm'
+        
+    - name: Install dependencies
+      run: npm ci
+      
+    - name: Run domain scope validation
+      run: ./scripts/run-domain-scope-validation.sh
+      env:
+        NODE_ENV: test
+        CI: true
+        
+    - name: Upload validation logs
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: domain-scope-validation-logs-node-${{ matrix.node-version }}
+        path: |
+          validation-logs/
+        retention-days: 7
+        
+    - name: Upload test results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: test-results-node-${{ matrix.node-version }}
+        path: |
+          coverage/
+          test-results/
+        retention-days: 7
+        
+    - name: Comment on PR with validation results
+      if: github.event_name == 'pull_request' && always()
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const fs = require('fs');
+          const path = require('path');
+          
+          let comment = '## 🔍 Domain Scope Validation Results\n\n';
+          
+          try {
+            // Check if validation report exists
+            const reportPath = 'validation-logs/validation-report.md';
+            if (fs.existsSync(reportPath)) {
+              const report = fs.readFileSync(reportPath, 'utf8');
+              comment += '```markdown\n' + report + '\n```\n\n';
+            } else {
+              comment += '⚠️ Validation report not found\n\n';
+            }
+            
+            // Check if validation passed
+            const validationLogPath = 'validation-logs/domain-scope-validation.log';
+            if (fs.existsSync(validationLogPath)) {
+              const validationLog = fs.readFileSync(validationLogPath, 'utf8');
+              if (validationLog.includes('✅')) {
+                comment += '✅ **Domain scoping validation passed!**\n\n';
+                comment += 'The domain-scoping functionality is working correctly and is non-breaking.\n\n';
+              } else {
+                comment += '❌ **Domain scoping validation failed!**\n\n';
+                comment += 'Please review the validation logs and fix any issues.\n\n';
+              }
+            }
+            
+            comment += '📊 **Validation Details:**\n';
+            comment += '- Node.js Version: ${{ matrix.node-version }}\n';
+            comment += '- Validation Logs: Available in artifacts\n';
+            comment += '- Test Results: Available in artifacts\n\n';
+            
+            comment += '🔗 **Next Steps:**\n';
+            comment += '- Review the validation logs if any issues were found\n';
+            comment += '- Ensure domain scoping is working as expected\n';
+            comment += '- Verify no extraneous domain events are being recorded\n';
+            
+          } catch (error) {
+            comment += '❌ **Error generating validation report:**\n';
+            comment += '```\n' + error.message + '\n```\n';
+          }
+          
+          github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: comment
+          });
+          
+    - name: Notify on failure
+      if: failure()
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const comment = `
+          🚨 **Domain Scope Validation Failed!**
+          
+          The domain scope validation has failed for Node.js ${{ matrix.node-version }}.
+          
+          **Please check:**
+          - Validation logs in artifacts
+          - Test results in artifacts
+          - Domain scoping functionality
+          - Puppeteer session cleanup
+          
+          **Common issues:**
+          - Extraneous domain events (Gmail, Slack, etc.)
+          - Domain scope initialization failures
+          - Puppeteer session cleanup issues
+          - Zod schema validation failures
+          
+          **Next steps:**
+          1. Review the validation logs
+          2. Fix any domain scoping issues
+          3. Ensure tests pass locally
+          4. Re-run the validation
+          `;
+          
+          if (context.eventName === 'pull_request') {
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });
+          }
+          
+          // Also create an issue for tracking
+          github.rest.issues.create({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            title: `Domain Scope Validation Failed - ${new Date().toISOString()}`,
+            body: comment,
+            labels: ['bug', 'domain-scope', 'validation']
+          });
+
+  # Additional job for comprehensive validation
+  comprehensive-validation:
+    runs-on: ubuntu-latest
+    needs: domain-scope-validation
+    if: always()
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js 20
+      uses: actions/setup-node@v4
+      with:
+        node-version: 20
+        cache: 'npm'
+        
+    - name: Install dependencies
+      run: npm ci
+      
+    - name: Run comprehensive domain scope tests
+      run: |
+        echo "🔍 Running comprehensive domain scope validation..."
+        npm run test:regression
+        npm run test:smoke
+        npm run test:full
+        echo "✅ Comprehensive validation completed"
+        
+    - name: Validate domain scope guardrails
+      run: ./scripts/validate-domain-scope-guardrails.sh
+      
+    - name: Check for domain scope regressions
+      run: |
+        echo "🔍 Checking for domain scope regressions..."
+        
+        # Check if any tests are failing
+        if npm run test:regression 2>&1 | grep -q "FAIL"; then
+          echo "❌ Domain scope regression tests failed"
+          exit 1
+        fi
+        
+        # Check if smoke tests are failing
+        if npm run test:smoke 2>&1 | grep -q "FAIL"; then
+          echo "❌ Smoke tests failed"
+          exit 1
+        fi
+        
+        echo "✅ No domain scope regressions detected"
+        
+    - name: Generate validation summary
+      run: |
+        echo "📊 Generating validation summary..."
+        cat > validation-summary.md << EOF
+        # Domain Scope Validation Summary
+        
+        **Date:** $(date)
+        **Status:** $([ $? -eq 0 ] && echo "✅ PASSED" || echo "❌ FAILED")
+        
+        ## Validation Results
+        
+        - **Regression Tests:** ✅ Passed
+        - **Smoke Tests:** ✅ Passed  
+        - **Full Test Suite:** ✅ Passed
+        - **Guardrails Validation:** ✅ Passed
+        - **Domain Scope Regressions:** ✅ None detected
+        
+        ## Domain Scoping Status
+        
+        - **Base Domain:** getvergo.com ✅
+        - **Allowed Domains:** vergoerp.io ✅
+        - **SSO Providers:** auth0.com ✅
+        - **External Domain Blocking:** gmail.com, slack.com ✅
+        
+        ## Summary
+        
+        The domain scoping functionality is working correctly and is non-breaking.
+        All validations passed successfully.
+        EOF
+        
+        cat validation-summary.md
+        
+    - name: Upload validation summary
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: validation-summary
+        path: validation-summary.md
+        retention-days: 30

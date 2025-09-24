@@ -72,7 +72,7 @@ vergo is a modern AI agent automation platform that enables users to create inte
   - `purpose_prompt`: User's natural language description
   - `agent_intents`: JSONB with LLM-generated intent annotations
   - `event_log`: JSONB with structured event timeline (legacy)
-  - `transcript`: Voice narration transcript from recordings
+  - `logicSpec`: Compiled workflow logic specification
   - `processing_status`: Background processing state (processing|ready|failed)
 - **Events**: Scalable event storage for multi-signal capture
   - `step`, `action`, `target`, `value`, `url`, `element_type`, `element_text`

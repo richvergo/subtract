@@ -922,8 +922,9 @@ export default function AgentReviewPage() {
             gap: "16px",
             justifyContent: "center"
           }}>
-            <Link href="/agents/create">
-              <button style={{
+            <button 
+              onClick={() => alert('Workflow creation is now handled through the enterprise Puppeteer stack. Use the API endpoints to create workflows programmatically.')}
+              style={{
                 background: "#007bff",
                 color: "#fff",
                 padding: "12px 24px",
@@ -934,9 +935,8 @@ export default function AgentReviewPage() {
                 cursor: "pointer",
                 transition: "background-color 0.2s ease"
               }}>
-                Create New Agent
+                Create New Workflow
               </button>
-            </Link>
             
             <Link href="/agents">
               <button style={{

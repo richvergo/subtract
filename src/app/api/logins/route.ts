@@ -10,9 +10,7 @@ import { db } from '@/lib/db';
 import { createLoginSchema } from '@/lib/schemas/agents';
 import { encryptLoginCredentials, maskLoginCredentials } from '@/lib/encryption';
 // LoginHealthChecker removed - using screen recording approach instead
-import { writeFile, mkdir } from 'fs/promises';
-import { join } from 'path';
-import { existsSync } from 'fs';
+// Removed unused imports
 
 /**
  * GET /api/logins - List user's logins (with masked credentials)

@@ -18,7 +18,7 @@ export function Sidebar() {
       href: '/tasks',
     },
     {
-      name: 'Agents',
+      name: 'Workflows',
       href: '/agents',
     },
     {
@@ -107,7 +107,7 @@ export function Sidebar() {
               >
                 <span style={{ fontSize: "16px" }}>
                   {item.name === 'Tasks' ? '📋' : 
-                   item.name === 'Agents' ? '🤖' : 
+                   item.name === 'Workflows' ? '🔄' : 
                    item.name === 'Logins' ? '🔑' : '•'}
                 </span>
                 <span>{item.name}</span>

@@ -91,13 +91,13 @@ This release represents a major breakthrough - login agents now work completely 
 
 - Enriched Event Logs System with multi-signal capture (URLs, keystrokes, element types, screenshots).
 - Visual Context Storage: secure screenshot handling with validation and sanitization.
-- Enhanced LLM Integration: summarization with visual context.
+- Enhanced LLM Integration: enterprise logic compilation with visual context.
 
 ### New API Endpoints
 
-- `POST /api/agents/record-events` – multi-signal capture
+- `POST /api/agents/record` – enterprise-grade workflow capture
 - `GET /api/agents/[id]/review` – enriched with events array + screenshots
-- `POST /api/agents/[id]/summarize` – integrates visual context
+- `POST /api/agents/[id]/generate-logic` – enterprise logic compilation
 
 ### Security
 

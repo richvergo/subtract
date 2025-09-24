@@ -1,20 +1,21 @@
-# Architecture Overview
+# Enterprise-Grade Architecture Overview
 
-This document provides a comprehensive overview of the vergo automation platform architecture, design decisions, and core workflows.
+This document provides a comprehensive overview of the vergo automation platform's enterprise-grade architecture, design decisions, and core workflows built on a robust Puppeteer-first stack.
 
 ## 🏗️ High-Level Architecture
 
 ### Core Philosophy
-**Agents-First Architecture** - The entire platform is designed around intelligent agents that can automate complex workflows with self-healing capabilities.
+**Enterprise-Grade Puppeteer-First Architecture** - The entire platform is designed around enterprise-grade browser automation with advanced workflow orchestration, secure login management, and intelligent execution engines.
 
 ```
 ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   Frontend      │    │   Backend       │    │   External      │
-│   (Next.js)     │    │   (API Routes)  │    │   Services      │
+│   Frontend      │    │   Backend       │    │   Automation    │
+│   (Next.js)     │    │   (API Routes)  │    │   Engine        │
 ├─────────────────┤    ├─────────────────┤    ├─────────────────┤
-│ • Agent UI      │◄──►│ • Agent API     │◄──►│ • LLM (OpenAI)  │
-│ • Login UI      │    │ • Auth API      │    │ • Puppeteer     │
-│ • Dashboard     │    │ • Queue System  │    │ • Redis         │
+│ • Workflow UI   │◄──►│ • Workflow API  │◄──►│ • Puppeteer     │
+│ • Login UI      │    │ • Auth API      │    │ • LoginAgent    │
+│ • Dashboard     │    │ • Queue System  │    │ • LogicCompiler │
+│ • Scheduler UI  │    │ • Scheduler     │    │ • AgentRunner   │
 └─────────────────┘    └─────────────────┘    └─────────────────┘
                               │
                               ▼
@@ -22,351 +23,408 @@ This document provides a comprehensive overview of the vergo automation platform
                     │   Database      │
                     │   (Prisma)      │
                     ├─────────────────┤
-                    │ • Agents        │
+                    │ • Workflows     │
+                    │ • Actions       │
+                    │ • Runs/Steps    │
+                    │ • Variables     │
+                    │ • Schedules     │
                     │ • Logins        │
-                    │ • Runs          │
-                    │ • Users         │
                     └─────────────────┘
 ```
 
-## 🧠 LLM Integration Architecture
+## 🎬 Enterprise-Grade Capture System
 
-### **New 4-Step Agent Creation with LLM**
+### **PuppeteerCaptureService Architecture**
 ```mermaid
 graph TD
-    A[Step 1: Choose Login] --> B[Step 2: Record Workflow]
-    B --> C[Step 3: LLM Summary]
-    C --> D[Step 4: Test Workflow]
+    A[User Action] --> B[PuppeteerCaptureService]
+    B --> C[DOM Metadata Capture]
+    B --> D[Screenshot Capture]
+    B --> E[Action Recording]
+    B --> F[LoginAgentAdapter]
     
-    B --> E[Screen Recording]
-    E --> F[Multi-signal Capture]
-    F --> G[Store Recording]
+    C --> G[Selector Generation]
+    D --> H[Visual Context]
+    E --> I[Action Metadata]
+    F --> J[Login Context]
     
-    C --> H[LLM Analysis]
-    H --> I[Generate Summary]
-    I --> J[Build User Confidence]
+    G --> K[WorkflowAction]
+    H --> K
+    I --> K
+    J --> K
     
-    D --> K[Execute Workflow]
-    K --> L[Validate Success]
-    L --> M[Agent Ready]
+    K --> L[Database Storage]
 ```
 
-### **LLM Service Integration**
+### **Multi-Signal Capture**
+- **DOM Metadata**: Element selectors, attributes, and context
+- **Visual Context**: Screenshots at key workflow moments
+- **Action Recording**: User interactions with precise timing
+- **Login Integration**: Secure credential capture and session management
+
+### **Selector Strategy**
+- **Priority-based selection**: ID → data-testid → name → role → class → nth-child
+- **Fallback mechanisms**: Multiple selector strategies per element
+- **Context awareness**: Element relationships and page state
+- **Self-healing**: Automatic selector repair on failures
+
+## 🔄 Enterprise Replay Engine
+
+### **PuppeteerReplayService Architecture**
 ```mermaid
-graph LR
-    A[User Recording] --> B[LLM Service]
-    B --> C[Workflow Analysis]
-    C --> D[Confidence Summary]
-    D --> E[User Approval]
-    E --> F[Agent Creation]
+graph TD
+    A[Workflow Run] --> B[PuppeteerReplayService]
+    B --> C[LoginAgentAdapter]
+    B --> D[Action Execution]
+    B --> E[Wait Policies]
+    B --> F[Retry Mechanisms]
     
-    G[Login Recording] --> H[LLM Service]
-    H --> I[Login Analysis]
-    I --> J[Workflow Extraction]
-    J --> K[Login Agent]
+    C --> G[Authentication]
+    D --> H[Element Interaction]
+    E --> I[Timing Control]
+    F --> J[Failure Recovery]
+    
+    G --> K[Execution Result]
+    H --> K
+    I --> K
+    J --> K
+    
+    K --> L[Run Logging]
 ```
 
-**Key LLM Methods:**
-- `summarizeWorkflow()` - Generates user-friendly workflow summaries
-- `analyzeRecording()` - Extracts login workflows from recordings
-- `annotateWorkflow()` - Adds intent annotations to agent steps
-- `repairSelector()` - Self-healing selector repair
+### **Execution Features**
+- **Intelligent Timing**: Wait policies for dynamic content
+- **Retry Mechanisms**: Automatic failure recovery
+- **Visual Feedback**: Element highlighting during execution
+- **Error Handling**: Comprehensive error capture and reporting
 
-## 🔄 Core Workflows
+## 🧠 Logic Compiler System
 
-### 1. **Create Agent** (Multi-Signal Recording + Processing)
+### **Natural Language Processing**
 ```mermaid
 graph TD
-    A[User starts recording] --> B[Capture DOM metadata]
-    B --> C[Record user actions]
-    C --> D[Capture screenshots]
-    D --> E[Stop recording]
-    E --> F[Process multi-signal data]
-    F --> G[Store events & screenshots]
-    G --> H[Generate LLM intents]
-    H --> I[Create agent with config]
-    I --> J[Agent ready for execution]
+    A[Natural Language Rules] --> B[LogicCompiler]
+    B --> C[Rule Parsing]
+    B --> D[Variable Extraction]
+    B --> E[Condition Analysis]
+    
+    C --> F[Rule Objects]
+    D --> G[Variable Definitions]
+    E --> H[Logic Spec]
+    
+    F --> I[Compiled Logic]
+    G --> I
+    H --> I
+    
+    I --> J[Validation]
+    J --> K[Database Storage]
 ```
 
-**Key Components:**
-- **Multi-Signal Capture**: URLs, keystrokes, element types, text content, screenshots
-- **DOM Capture**: Rich metadata extraction (selectors, timestamps, context)
-- **Visual Context**: Screenshot capture at key workflow moments
-- **Event Storage**: Scalable Event table for large datasets
-- **LLM Processing**: Intent generation with visual context
-- **Agent Storage**: Configuration, intents, and event data in database
+### **Rule Engine Features**
+- **Conditional Logic**: If-then-else statements and complex conditions
+- **Loop Processing**: For-each and while loops with context
+- **Variable Handling**: Dynamic variable injection and validation
+- **Error Validation**: Comprehensive logic specification validation
 
-### 2. **Run Agent** (Two-Stage Execution)
+## 🏃 Agent Runner System
+
+### **Enterprise Execution Engine**
 ```mermaid
 graph TD
-    A[Trigger agent run] --> B[Primary automation]
-    B --> C{Success?}
-    C -->|Yes| D[Complete execution]
-    C -->|No| E[LLM fallback repair]
-    E --> F[Retry with repaired selectors]
-    F --> G{Success?}
-    G -->|Yes| D
-    G -->|No| H[Report failure]
+    A[Workflow Run Request] --> B[AgentRunner]
+    B --> C[LoginAgentAdapter]
+    B --> D[PuppeteerReplayService]
+    B --> E[LogicCompiler]
+    B --> F[Monitoring]
+    
+    C --> G[Authentication]
+    D --> H[Action Execution]
+    E --> I[Rule Evaluation]
+    F --> J[Performance Tracking]
+    
+    G --> K[Execution Context]
+    H --> K
+    I --> K
+    J --> K
+    
+    K --> L[Run Result]
+    L --> M[Database Logging]
 ```
 
-**Execution Stages:**
-1. **Primary Automation**: Execute recorded workflow as-is
-2. **LLM Fallback**: If selectors fail, use LLM to repair and retry
-3. **Self-Healing**: Automatic selector repair based on DOM changes
+### **Execution Features**
+- **Enterprise-grade reliability**: Production-ready execution
+- **LoginAgentAdapter integration**: Secure authentication handling
+- **Real-time monitoring**: Execution tracking and performance metrics
+- **Screenshot capture**: Visual debugging and audit trails
 
-### 3. **Login Management** (Vault + Reconnect)
+## 🔐 LoginAgentAdapter System
+
+### **Universal Login Support**
 ```mermaid
 graph TD
-    A[Store encrypted credentials] --> B[Health monitoring]
-    B --> C{Login valid?}
-    C -->|Yes| D[Use stored session]
-    C -->|No| E[Trigger reconnection]
-    E --> F[Automated re-authentication]
-    F --> G[Update stored session]
-    G --> D
+    A[Login Request] --> B[LoginAgentAdapter]
+    B --> C[UniversalLoginDetector]
+    B --> D[SessionManager]
+    B --> E[Authentication Flow]
+    
+    C --> F[Login Detection]
+    D --> G[Session Management]
+    E --> H[Credential Handling]
+    
+    F --> I[Login Context]
+    G --> I
+    H --> I
+    
+    I --> J[Authentication Result]
+    J --> K[Session Storage]
 ```
 
-**Security Features:**
-- **Encrypted Storage**: Credentials encrypted at rest
-- **Session Management**: Automatic session validation
-- **Reconnection Flow**: Seamless re-authentication
-- **Health Monitoring**: Proactive login status checking
+### **Login Features**
+- **Universal detection**: Automatic login form detection
+- **Session management**: Secure credential storage and reuse
+- **2FA support**: Multi-factor authentication integration
+- **Health monitoring**: Proactive login status validation
 
-## 📊 Event System Architecture
+## ⏰ Advanced Scheduler
 
-### Multi-Signal Event Capture
-The platform now supports enriched event logs with multi-signal capture for better automation context:
-
+### **Workflow Orchestration**
 ```mermaid
 graph TD
-    A[User Action] --> B[Event Capture]
-    B --> C[DOM Metadata]
-    B --> D[URL Tracking]
-    B --> E[Keystroke Capture]
-    B --> F[Screenshot Capture]
-    C --> G[Event Object]
-    D --> G
-    E --> G
-    F --> H[Screenshot Storage]
-    H --> I[File System]
-    G --> J[Event Table]
-    G --> K[JSON Storage]
+    A[Schedule Request] --> B[Scheduler]
+    B --> C[Cron Engine]
+    B --> D[Queue Management]
+    B --> E[Event Processing]
+    
+    C --> F[Time-based Triggers]
+    D --> G[Job Queuing]
+    E --> H[Event Triggers]
+    
+    F --> I[Execution Trigger]
+    G --> I
+    H --> I
+    
+    I --> J[Workflow Execution]
+    J --> K[Result Processing]
 ```
 
-### Event Data Structure
+### **Scheduling Features**
+- **Cron expressions**: Flexible time-based scheduling
+- **Event-driven**: Trigger workflows based on external events
+- **Queue management**: Background job processing
+- **Retry policies**: Configurable failure recovery
+
+## 📊 Database Architecture
+
+### **Enterprise Workflow Models**
+
+#### **Workflow Core**
 ```typescript
-interface EventLogEntry {
-  step: number;                    // Sequential step number
-  action: 'navigate' | 'click' | 'type' | 'wait' | 'scroll' | 'hover' | 'select';
-  target?: string;                 // CSS selector or element identifier
-  value?: string;                  // Input value (excludes passwords)
-  url?: string;                    // Current page URL
-  elementType?: string;            // HTML element type
-  elementText?: string;            // Text content of element
-  screenshotUrl?: string;          // Reference to stored screenshot
-  timestamp: number;               // Unix timestamp
+model Workflow {
+  id            String        @id @default(cuid())
+  name          String
+  description   String?
+  status        WorkflowStatus @default(DRAFT)
+  version       String        @default("1.0.0")
+  requiresLogin Boolean       @default(false)
+  loginConfig   Json?         // Encrypted LoginConfig JSON
+  logicSpec     Json          // LogicSpec JSON
+  metadata      Json?         // Additional metadata
+  ownerId       String
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  
+  // Relations
+  actions       WorkflowAction[]
+  variables     WorkflowVariable[]
+  runs          WorkflowRun[]
+  schedules     WorkflowSchedule[]
+  owner         User          @relation(fields: [ownerId], references: [id])
 }
 ```
 
-### Storage Strategy
-- **Event Table**: Scalable storage for large event datasets with indexed queries
-- **JSON Storage**: Legacy `eventLog` field for simple event arrays
-- **Screenshot Storage**: File system storage in `/uploads/events/` with URL references
-- **Security**: Password values automatically excluded, file validation enforced
+#### **Action System**
+```typescript
+model WorkflowAction {
+  id         String   @id @default(cuid())
+  workflowId String
+  action     Json     // Action JSON with metadata
+  order      Int
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  
+  workflow   Workflow @relation(fields: [workflowId], references: [id])
+}
+```
 
-### API Endpoints
-- **POST /api/agents/record-events**: Create agent with enriched event logs
-- **GET /api/agents/[id]/review**: Retrieve agent with event data and screenshots
-- **POST /api/agents/[id]/summarize**: Enhanced summarization with visual context
+#### **Variable System**
+```typescript
+model WorkflowVariable {
+  id         String   @id @default(cuid())
+  workflowId String
+  variable   Json     // VariableDef JSON
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  
+  workflow   Workflow @relation(fields: [workflowId], references: [id])
+}
+```
+
+#### **Execution Tracking**
+```typescript
+model WorkflowRun {
+  id         String        @id @default(cuid())
+  workflowId String
+  status     RunStepStatus @default(PENDING)
+  startedAt  DateTime      @default(now())
+  finishedAt DateTime?
+  variables  Json?         // Variables used in this run
+  result     Json?         // Run result
+  error      String?       // Error message if failed
+  logs       Json?         // Array of RunLog JSON
+  metadata   Json?         // Additional metadata
+  
+  workflow   Workflow      @relation(fields: [workflowId], references: [id])
+  steps      WorkflowRunStep[]
+}
+
+model WorkflowRunStep {
+  id         String        @id @default(cuid())
+  runId      String
+  actionId   String
+  status     RunStepStatus @default(PENDING)
+  startedAt  DateTime      @default(now())
+  finishedAt DateTime?
+  result     Json?         // Step result
+  error      String?       // Error message if failed
+  logs       Json?         // Array of RunLog JSON
+  metadata   Json?         // Additional metadata
+  
+  run        WorkflowRun   @relation(fields: [runId], references: [id])
+}
+```
+
+#### **Scheduling System**
+```typescript
+model WorkflowSchedule {
+  id         String   @id @default(cuid())
+  workflowId String
+  schedule   Json     // Schedule configuration
+  enabled    Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  
+  workflow   Workflow @relation(fields: [workflowId], references: [id])
+}
+```
+
+### **Legacy Agent Models** (Maintained for compatibility)
+- **Agent**: Traditional agent definitions
+- **Login**: Secure credential storage
+- **AgentRun**: Execution history and results
+- **Event**: Detailed action logging
+
+## 🔄 Core Workflows
+
+### **1. Enterprise Workflow Creation**
+```mermaid
+graph TD
+    A[User starts recording] --> B[PuppeteerCaptureService]
+    B --> C[Capture DOM metadata]
+    C --> D[Record user actions]
+    D --> E[Capture screenshots]
+    E --> F[LoginAgentAdapter integration]
+    F --> G[Stop recording]
+    G --> H[Process multi-signal data]
+    H --> I[Store WorkflowAction records]
+    I --> J[Generate LogicSpec]
+    J --> K[Create Workflow record]
+    K --> L[Workflow ready for execution]
+```
+
+### **2. Logic Compilation**
+```mermaid
+graph TD
+    A[Natural Language Rules] --> B[LogicCompiler]
+    B --> C[Parse Rules]
+    C --> D[Extract Variables]
+    D --> E[Generate LogicSpec]
+    E --> F[Validate Logic]
+    F --> G[Store in Database]
+    G --> H[Workflow Ready]
+```
+
+### **3. Enterprise Execution**
+```mermaid
+graph TD
+    A[Execute Workflow] --> B[AgentRunner]
+    B --> C[LoginAgentAdapter]
+    C --> D[Authentication]
+    D --> E[PuppeteerReplayService]
+    E --> F[Execute Actions]
+    F --> G[LogicCompiler]
+    G --> H[Evaluate Rules]
+    H --> I[Monitor Execution]
+    I --> J[Log Results]
+    J --> K[Update WorkflowRun]
+```
+
+### **4. Advanced Scheduling**
+```mermaid
+graph TD
+    A[Schedule Trigger] --> B[Scheduler]
+    B --> C[Validate Schedule]
+    C --> D[Queue Execution]
+    D --> E[AgentRunner]
+    E --> F[Execute Workflow]
+    F --> G[Log Results]
+    G --> H[Update Schedule Status]
+```
 
 ## 🛠️ Technology Stack
 
-### Frontend
+### **Frontend**
 - **Next.js 15** - React framework with App Router
 - **React 19** - Latest React with concurrent features
-- **Inline CSS** - No external CSS frameworks for simplicity
-- **TypeScript** - Type-safe development
+- **TypeScript** - Full type safety and IntelliSense
+- **Custom CSS** - Optimized styling without external frameworks
 
-### Backend
+### **Backend**
 - **Next.js API Routes** - Serverless API endpoints
 - **Prisma** - Type-safe database ORM
 - **NextAuth.js** - Authentication and session management
 - **Zod** - Runtime type validation
 
-### Database
-- **SQLite** - Development and testing
-- **PostgreSQL** - Production (via Prisma)
-- **Prisma Client** - Generated type-safe database client
+### **Automation Engine**
+- **Puppeteer** - Enterprise-grade browser automation
+- **LoginAgentAdapter** - Universal login integration
+- **LogicCompiler** - Natural language rule processing
+- **AgentRunner** - Production-ready execution engine
 
-### Queue System
-- **Redis** - Queue storage and job management
-- **BullMQ** - Job queue processing
-- **In-memory fallback** - Development without Redis
-
-### External Services
-- **OpenAI API** - LLM for intent generation and repair
-- **Puppeteer** - Browser automation and DOM capture
-- **Jest** - Testing framework
-
-## 🧠 Self-Healing Workflow
-
-### Metadata-Rich Capture
-```typescript
-interface ActionMetadata {
-  selector: string;           // Primary selector
-  tag: string;               // HTML tag name
-  timestamp: number;         // When action occurred
-  intent?: string;           // User intent (LLM generated)
-  type?: string;             // Input type (text, button, etc.)
-  innerText?: string;        // Visible text content
-  ariaLabel?: string;        // Accessibility label
-  placeholder?: string;      // Input placeholder
-}
-```
-
-### LLM Intent Repair
-```typescript
-interface RepairResult {
-  selector: string;          // Repaired selector
-  confidence: number;        // Confidence score (0-1)
-  reasoning: string;         // Explanation of repair
-}
-```
-
-### Repair Process
-1. **Selector Failure Detection**: Monitor for element not found errors
-2. **DOM Analysis**: Capture current page state
-3. **LLM Processing**: Generate alternative selectors
-4. **Confidence Scoring**: Rate repair quality
-5. **Retry Execution**: Attempt with repaired selector
-
-## 📊 Data Models
-
-### Agent Schema
-```typescript
-model Agent {
-  id              String   @id @default(cuid())
-  name            String
-  description     String?
-  purposePrompt   String   // User's intent description
-  agentConfig     String?  // JSON: Recorded workflow steps
-  agentIntents    String?  // JSON: LLM-generated intents
-  status          AgentStatus
-  processingStatus String
-  processingProgress Int
-  ownerId         String
-  owner           User     @relation(fields: [ownerId], references: [id])
-  agentRuns       AgentRun[]
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-}
-```
-
-### Login Schema
-```typescript
-model Login {
-  id              String   @id @default(cuid())
-  name            String
-  loginUrl        String
-  username        String
-  password        String   // Encrypted
-  testOnCreate    Boolean  @default(true)
-  ownerId         String
-  owner           User     @relation(fields: [ownerId], references: [id])
-  healthResults   LoginHealth[]
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-}
-```
-
-### Agent Run Schema
-```typescript
-model AgentRun {
-  id              String   @id @default(cuid())
-  agentId         String
-  agent           Agent    @relation(fields: [agentId], references: [id])
-  status          RunStatus
-  result          String?
-  logs            String?  // JSON: Execution logs
-  startedAt       DateTime @default(now())
-  finishedAt      DateTime?
-  screenshot      String?  // Base64 screenshot
-  error           String?
-  userFeedback    String?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-}
-```
-
-## 🚀 New API Endpoints (LLM Integration)
-
-### **Agent Creation & LLM Processing**
-```typescript
-// 4-Step Agent Creation
-POST /api/agents/record
-- Creates agent with login association
-- Handles multipart form data with recording
-- Associates selected login with agent
-
-POST /api/agents/[id]/summarize-workflow
-- Generates AI summary of recorded workflow
-- Builds user confidence with structured output
-- Returns user-friendly workflow description
-
-POST /api/agents/[id]/test-workflow
-- Executes agent workflow in test mode
-- Validates automation works correctly
-- Returns success/failure with details
-```
-
-### **Login Recording & AI Analysis**
-```typescript
-POST /api/logins
-- Enhanced to handle multipart form data
-- Accepts screen recordings with login credentials
-- Triggers automatic LLM analysis
-
-POST /api/logins/[id]/analyze
-- AI analysis of login recording
-- Extracts workflow steps and selectors
-- Generates login automation workflow
-- Stores analysis in customConfig field
-```
-
-### **LLM Service Methods**
-```typescript
-class LLMService {
-  // New method for workflow summarization
-  async summarizeWorkflow(recordedSteps: any[], transcript?: string): Promise<string>
-  
-  // Enhanced login analysis
-  async analyzeRecording(recordingUrl: string, prompt: string): Promise<string>
-  
-  // Existing methods
-  async annotateWorkflow(recordedSteps: AgentConfig, userPrompt: string): Promise<AgentIntents>
-  async repairSelector(failedSelector: string, intent: string, domSnapshot: string): Promise<RepairResult>
-}
-```
+### **Infrastructure**
+- **SQLite** - Development database
+- **PostgreSQL** - Production database
+- **Redis** - Queue processing and caching
+- **Docker** - Containerized deployment
 
 ## 🔐 Security Architecture
 
-### Authentication Flow
+### **Authentication Flow**
 ```mermaid
 graph TD
-    A[User login] --> B[NextAuth.js]
-    B --> C[Session creation]
-    C --> D[JWT token]
-    D --> E[API route protection]
-    E --> F[User context]
+    A[User Login] --> B[NextAuth.js]
+    B --> C[JWT Token Generation]
+    C --> D[Session Creation]
+    D --> E[API Route Protection]
+    E --> F[User Context]
 ```
 
-### Credential Encryption
+### **Credential Encryption**
 - **AES-256 encryption** for stored passwords
 - **Environment-based keys** for encryption
 - **Session-based decryption** for runtime use
 - **No plaintext storage** of sensitive data
 
-### API Security
+### **API Security**
 - **JWT-based authentication** via NextAuth.js
 - **Route-level protection** for sensitive endpoints
 - **Input validation** with Zod schemas
@@ -374,14 +432,14 @@ graph TD
 
 ## 🚀 Performance Considerations
 
-### Optimization Strategies
+### **Optimization Strategies**
 - **Server-side rendering** for initial page loads
 - **Client-side hydration** for interactivity
 - **Database indexing** on frequently queried fields
 - **Queue-based processing** for long-running tasks
 - **Caching** for frequently accessed data
 
-### Scalability
+### **Scalability**
 - **Stateless API design** for horizontal scaling
 - **Database connection pooling** via Prisma
 - **Queue-based job processing** for background tasks
@@ -389,7 +447,7 @@ graph TD
 
 ## 🔄 Development Workflow
 
-### Local Development
+### **Local Development**
 ```bash
 # Start development server
 npm run dev
@@ -405,27 +463,29 @@ npx prisma studio
 npx prisma generate
 ```
 
-### Deployment
+### **Testing Strategy**
 ```bash
-# Build for production
-npm run build
+# Unit tests
+npm test -- tests/agents/capture/
+npm test -- tests/agents/exec/
+npm test -- tests/agents/login/
 
-# Start production server
-npm run start
+# Integration tests
+./scripts/run-integration-tests.sh
 
-# Database migrations
-npx prisma migrate deploy
+# E2E tests
+npm test -- tests/integration/WorkflowIntegration.test.ts
 ```
 
 ## 📈 Monitoring & Observability
 
-### Logging Strategy
+### **Logging Strategy**
 - **Structured logging** with consistent format
 - **Error tracking** with stack traces
 - **Performance metrics** for key operations
 - **User action tracking** for analytics
 
-### Health Checks
+### **Health Checks**
 - **Database connectivity** monitoring
 - **External service** availability
 - **Queue processing** status
@@ -433,14 +493,14 @@ npx prisma migrate deploy
 
 ## 🔮 Future Considerations
 
-### Planned Enhancements
+### **Planned Enhancements**
 - **Multi-tenant support** for enterprise use
-- **Advanced scheduling** for recurring agents
+- **Advanced scheduling** with complex cron expressions
 - **Plugin system** for custom actions
 - **Analytics dashboard** for usage insights
 - **API rate limiting** and usage quotas
 
-### Scalability Roadmap
+### **Scalability Roadmap**
 - **Microservices architecture** for large deployments
 - **Event-driven architecture** for real-time updates
 - **Distributed queue processing** for high throughput
@@ -449,8 +509,9 @@ npx prisma migrate deploy
 ---
 
 **Architecture Principles:**
-1. **Simplicity over complexity** - Prefer simple, maintainable solutions
+1. **Enterprise-grade reliability** - Production-ready automation
 2. **Type safety** - Leverage TypeScript for runtime safety
 3. **Self-healing** - Build resilience into core workflows
 4. **Security first** - Protect user data and credentials
 5. **Developer experience** - Make development and testing easy
+6. **Scalability** - Design for enterprise-scale operations

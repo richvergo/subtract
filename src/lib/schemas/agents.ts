@@ -272,6 +272,43 @@ export const summarizeWithEventsSchema = z.object({
   transcript: z.string().max(10000, 'Transcript too long').optional(),
 });
 
+// Workflow Schedule schemas
+export const WorkflowScheduleSchema = z.object({
+  id: z.string().min(1, 'Schedule ID is required'),
+  workflowId: z.string().min(1, 'Workflow ID is required'),
+  name: z.string().min(1, 'Schedule name is required').max(255, 'Name too long').optional(),
+  cronExpression: z.string().min(1, 'Cron expression is required'),
+  timezone: z.string().default('UTC'),
+  isActive: z.boolean().default(true),
+  runConfig: z.record(z.any()).optional(),
+  variables: z.record(z.any()).optional(),
+  metadata: z.record(z.any()).optional(),
+  createdAt: z.date(),
+  updatedAt: z.date(),
+  nextRunAt: z.date().optional(),
+  lastRunAt: z.date().optional(),
+});
+
+export const CreateWorkflowScheduleSchema = z.object({
+  workflowId: z.string().min(1, 'Workflow ID is required'),
+  name: z.string().min(1, 'Schedule name is required').max(255, 'Name too long').optional(),
+  cronExpression: z.string().min(1, 'Cron expression is required'),
+  timezone: z.string().default('UTC'),
+  isActive: z.boolean().default(true),
+  runConfig: z.record(z.any()).optional(),
+  variables: z.record(z.any()).optional(),
+  metadata: z.record(z.any()).optional(),
+});
+
+export const UpdateWorkflowScheduleSchema = z.object({
+  name: z.string().min(1, 'Schedule name is required').max(255, 'Name too long').optional(),
+  cronExpression: z.string().min(1, 'Cron expression is required').optional(),
+  timezone: z.string().optional(),
+  isActive: z.boolean().optional(),
+  runConfig: z.record(z.any()).optional(),
+  variables: z.record(z.any()).optional(),
+  metadata: z.record(z.any()).optional(),
+});
 
 // Type exports
 export type LoginField = z.infer<typeof loginFieldSchema>;
@@ -300,3 +337,6 @@ export type EventLogEntry = z.infer<typeof eventLogEntrySchema>;
 export type EventLog = z.infer<typeof eventLogSchema>;
 export type RecordWorkflowWithEventsInput = z.infer<typeof recordWorkflowWithEventsSchema>;
 export type SummarizeWithEventsInput = z.infer<typeof summarizeWithEventsSchema>;
+export type WorkflowSchedule = z.infer<typeof WorkflowScheduleSchema>;
+export type CreateWorkflowScheduleInput = z.infer<typeof CreateWorkflowScheduleSchema>;
+export type UpdateWorkflowScheduleInput = z.infer<typeof UpdateWorkflowScheduleSchema>;

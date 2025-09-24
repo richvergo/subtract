@@ -1,88 +1,92 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth-config';
-import { db } from '@/lib/db';
-
 /**
- * GET /api/agents/[id]/runs - List run history for an agent
+ * API Route: /api/agents/[id]/runs
+ * Get workflow run history
  */
+
+import { NextRequest, NextResponse } from 'next/server'
+import { prisma } from '@/lib/db'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/lib/auth-config'
+
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.email) {
+    // Check authentication
+    const session = await getServerSession(authOptions)
+    if (!session?.user?.id) {
       return NextResponse.json(
-        { error: 'Unauthorized' },
+        { error: 'Authentication required' },
         { status: 401 }
-      );
+      )
     }
 
-    const user = await db.user.findUnique({
-      where: { email: session.user.email },
-      select: { id: true },
-    });
+    const { id } = await params
 
-    if (!user) {
-      return NextResponse.json(
-        { error: 'User not found' },
-        { status: 404 }
-      );
-    }
-
-    // Await params
-    const { id: agentId } = await params;
-
-    // Check if agent exists and user owns it
-    const agent = await db.agent.findFirst({
+    // Get workflow from database
+    const workflow = await prisma.workflow.findFirst({
       where: {
-        id: agentId,
-        ownerId: user.id,
-      },
-      select: { id: true },
-    });
+        id,
+        ownerId: session.user.id
+      }
+    })
 
-    if (!agent) {
+    if (!workflow) {
       return NextResponse.json(
-        { error: 'Agent not found' },
+        { error: 'Workflow not found' },
         { status: 404 }
-      );
+      )
     }
 
-    // Get query parameters for pagination
-    const { searchParams } = new URL(request.url);
-    const page = parseInt(searchParams.get('page') || '1');
-    const limit = parseInt(searchParams.get('limit') || '20');
-    const offset = (page - 1) * limit;
+    // Get workflow runs
+    const runs = await prisma.workflowRun.findMany({
+      where: {
+        workflowId: id
+      },
+      orderBy: {
+        startedAt: 'desc'
+      },
+      select: {
+        id: true,
+        status: true,
+        startedAt: true,
+        finishedAt: true,
+        variables: true,
+        result: true,
+        error: true,
+        metadata: true
+      }
+    })
 
-    // Fetch agent runs with pagination
-    const [runs, totalCount] = await Promise.all([
-      db.agentRun.findMany({
-        where: { agentId: agentId },
-        orderBy: { startedAt: 'desc' },
-        skip: offset,
-        take: limit,
-      }),
-      db.agentRun.count({
-        where: { agentId: agentId },
-      }),
-    ]);
+    console.log(`📊 Retrieved ${runs.length} runs for workflow: ${id}`)
 
     return NextResponse.json({
-      runs,
-      pagination: {
-        page,
-        limit,
-        total: totalCount,
-        totalPages: Math.ceil(totalCount / limit),
-      },
-    });
+      success: true,
+      data: {
+        workflowId: id,
+        runs: runs.map(run => ({
+          id: run.id,
+          status: run.status,
+          startedAt: run.startedAt,
+          finishedAt: run.finishedAt,
+          duration: run.finishedAt 
+            ? new Date(run.finishedAt).getTime() - new Date(run.startedAt).getTime()
+            : null,
+          variables: run.variables,
+          result: run.result,
+          error: run.error,
+          metadata: run.metadata
+        }))
+      }
+    })
+
   } catch (error) {
-    console.error('Error fetching agent runs:', error);
+    console.error('❌ Failed to get workflow runs:', error)
+    
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { error: 'Failed to get workflow runs' },
       { status: 500 }
-    );
+    )
   }
 }
