@@ -8,6 +8,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "auth:fix": "./scripts/fix-auth-loading.sh",
+    "auth:check": "curl -s http://localhost:3000/api/auth/health | jq . || echo 'Auth service not responding'",
+    "auth:validate": "node -e \"const { validateAuthConfig } = require('./src/lib/auth-guardrails.ts'); console.log(validateAuthConfig())\"",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
@@ -43,9 +46,13 @@
     "check-variableconfigmodal-guardrails": "./scripts/check-variableconfigmodal-guardrails.sh",
     "check-domain-scope-guardrails": "./scripts/validate-domain-scope-guardrails.sh",
     "ci": "npm run lint && npm run type-check && npm run coverage:threshold && npm run dead-code && npm run check-legacy-docs && npm run check-legacy-frontend && npm run check-workflowreplay-guardrails && npm run check-variableconfigmodal-guardrails && npm run check-domain-scope-guardrails",
-    "prepare": "husky"
+    "prepare": "husky",
+    "puppeteer:enforce": "node scripts/enforce-puppeteer-guardrails.js",
+    "puppeteer:validate": "node scripts/enforce-puppeteer-guardrails.js",
+    "prebuild": "npm run puppeteer:enforce"
   },
   "dependencies": {
+    "@heroicons/react": "^2.2.0",
     "@jest/globals": "^30.1.2",
     "@prisma/client": "^6.16.1",
     "@types/bcryptjs": "^2.4.6",
@@ -55,7 +62,6 @@
     "express": "^5.1.0",
     "ioredis": "^5.8.0",
     "next": "15.5.2",
-    "next-auth": "^4.24.11",
     "prisma": "^6.15.0",
     "puppeteer": "^24.20.0",
     "react": "19.1.0",

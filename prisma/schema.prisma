@@ -7,229 +7,7 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model User {
-  id           String           @id @default(cuid())
-  email        String           @unique
-  passwordHash String
-  name         String?
-  createdAt    DateTime         @default(now())
-  agents       Agent[]
-  logins       Login[]
-  memberships  Membership[]
-  tasks        Task[]
-  workflows    Workflow[]
-}
-
-model Entity {
-  id          String       @id @default(cuid())
-  name        String
-  createdAt   DateTime     @default(now())
-  memberships Membership[]
-}
-
-model Membership {
-  id       String @id @default(cuid())
-  userId   String
-  entityId String
-  role     Role   @default(EMPLOYEE)
-  entity   Entity @relation(fields: [entityId], references: [id])
-  user     User   @relation(fields: [userId], references: [id])
-
-  @@unique([userId, entityId])
-}
-
-model Login {
-  id             String       @id @default(cuid())
-  name           String
-  loginUrl       String
-  username       String
-  password       String?
-  oauthToken     String?
-  status         LoginStatus  @default(UNKNOWN)
-  lastCheckedAt  DateTime?
-  lastSuccessAt  DateTime?
-  lastFailureAt  DateTime?
-  failureCount   Int          @default(0)
-  errorMessage   String?
-  ownerId        String
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
-  customConfig   String?
-  templateId     String?
-  sessionData    String?
-  sessionExpiry  DateTime?
-  recordingUrl   String?
-  analysisStatus String?      @default("pending") // pending, processing, completed, failed
-  analysisResult String?      // JSON string containing analysis results
-  agentLogins    AgentLogin[]
-  owner          User         @relation(fields: [ownerId], references: [id], onDelete: Cascade)
-}
-
-model Agent {
-  id                 String       @id @default(cuid())
-  name               String
-  description        String?
-  purposePrompt      String
-  agentConfig        String?
-  agentIntents       String?
-  status             AgentStatus  @default(DRAFT)
-  processingStatus   String       @default("processing")
-  processingProgress Int?
-  // recordingPath removed - using screen recording approach instead
-  ownerId            String
-  createdAt          DateTime     @default(now())
-  updatedAt          DateTime     @updatedAt
-  recordingUrl       String?
-  audioUrl           String?
-  llmSummary         String?
-  userContext        String?
-  eventLog           String?
-  transcript         String?
-  owner              User         @relation(fields: [ownerId], references: [id], onDelete: Cascade)
-  agentLogins        AgentLogin[]
-  agentRuns          AgentRun[]
-  events             Event[]
-  tasks              Task[]
-}
-
-model AgentLogin {
-  id      String @id @default(cuid())
-  agentId String
-  loginId String
-  login   Login  @relation(fields: [loginId], references: [id], onDelete: Cascade)
-  agent   Agent  @relation(fields: [agentId], references: [id], onDelete: Cascade)
-
-  @@unique([agentId, loginId])
-}
-
-model AgentRun {
-  id                   String    @id @default(cuid())
-  agentId              String
-  status               RunStatus @default(PENDING)
-  startedAt            DateTime  @default(now())
-  finishedAt           DateTime?
-  result               String?
-  error                String?
-  logs                 String?
-  screenshot           String?
-  prompt               String?
-  requiresConfirmation Boolean   @default(false)
-  confirmationData     String?
-  confirmedAt          DateTime?
-  confirmedBy          String?
-  userConfirmed        Boolean   @default(false)
-  userFeedback         String?
-  agent                Agent     @relation(fields: [agentId], references: [id], onDelete: Cascade)
-
-  @@index([agentId, startedAt])
-}
-
-model Task {
-  id          String     @id @default(cuid())
-  name        String
-  description String?
-  agentId     String
-  userId      String
-  parameters  String?
-  schedule    String?
-  priority    String     @default("normal")
-  status      TaskStatus @default(PENDING)
-  createdAt   DateTime   @default(now())
-  startedAt   DateTime?
-  finishedAt  DateTime?
-  result      String?
-  error       String?
-  logs        String?
-  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  agent       Agent      @relation(fields: [agentId], references: [id], onDelete: Cascade)
-
-  @@index([userId, createdAt])
-  @@index([agentId, status])
-}
-
-// AgentRecording model removed - using screen recording approach instead
-
-model Event {
-  id            String   @id @default(cuid())
-  agentId       String
-  step          Int
-  action        String
-  target        String?
-  value         String?
-  url           String?
-  elementType   String?
-  elementText   String?
-  screenshotUrl String?
-  createdAt     DateTime @default(now())
-  agent         Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
-
-  @@index([agentId, step])
-}
-
-enum Role {
-  ADMIN
-  MANAGER
-  EMPLOYEE
-}
-
-enum LoginStatus {
-  UNKNOWN
-  ACTIVE
-  NEEDS_RECONNECT
-  DISCONNECTED
-  BROKEN
-  EXPIRED
-  SUSPENDED
-  READY_FOR_AGENTS
-  NEEDS_TESTING
-}
-
-enum AgentStatus {
-  DRAFT
-  ACTIVE
-  REJECTED
-  INACTIVE
-}
-
-enum RunStatus {
-  PENDING
-  RUNNING
-  COMPLETED
-  FAILED
-  CANCELLED
-  REQUIRES_CONFIRMATION
-  CONFIRMED
-  REJECTED
-}
-
-enum TaskStatus {
-  PENDING
-  RUNNING
-  COMPLETED
-  FAILED
-  CANCELLED
-}
-
-model ExecutionMetrics {
-  id              String   @id @default(cuid())
-  agentId         String
-  taskId          String
-  startTime       DateTime
-  endTime         DateTime
-  duration        Int      // in milliseconds
-  totalSteps      Int
-  successfulSteps Int
-  failedSteps     Int
-  retryAttempts   Int
-  errors          String?  // JSON array of error messages
-  screenshots     String?  // JSON array of screenshot paths
-  repairs         String?  // JSON array of repair attempts
-  successRate     Float
-  performanceScore Float
-  createdAt       DateTime @default(now())
-}
-
-// New Enterprise Workflow Models
+// Completely simplified schema - NO foreign key constraints, NO ownerId
 model Workflow {
   id            String        @id @default(cuid())
   name          String
@@ -237,35 +15,32 @@ model Workflow {
   status        WorkflowStatus @default(DRAFT)
   version       String        @default("1.0.0")
   requiresLogin Boolean       @default(false)
-  loginConfig   Json?         // Encrypted LoginConfig JSON
+  loginConfig   Json?         
+  isTaskTemplate Boolean      @default(false)
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
-  ownerId       String
-  logicSpec     Json          // LogicSpec JSON
-  metadata      Json?         // Additional metadata
-  owner         User          @relation(fields: [ownerId], references: [id], onDelete: Cascade)
-  actions       WorkflowAction[]
-  variables     WorkflowVariable[]
-  runs          WorkflowRun[]
+  logicSpec     Json          
+  metadata      Json?         
 }
 
 model WorkflowAction {
   id         String   @id @default(cuid())
   workflowId String
-  action     Json     // Action JSON
+  action     Json     
   order      Int
+  screenshotUrl String? 
+  selectorBox Json?     
+  annotations Json?     
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
-  workflow   Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
 }
 
 model WorkflowVariable {
   id         String   @id @default(cuid())
   workflowId String
-  variable   Json     // VariableDef JSON
+  variable   Json     
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
-  workflow   Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
 }
 
 model WorkflowRun {
@@ -274,13 +49,11 @@ model WorkflowRun {
   status     RunStepStatus @default(PENDING)
   startedAt  DateTime      @default(now())
   finishedAt DateTime?
-  variables  Json?         // Variables used in this run
-  result     Json?         // Run result
-  error      String?       // Error message if failed
-  logs       Json?         // Array of RunLog JSON
-  metadata   Json?         // Additional metadata
-  workflow   Workflow      @relation(fields: [workflowId], references: [id], onDelete: Cascade)
-  steps      WorkflowRunStep[]
+  variables  Json?         
+  result     Json?         
+  error      String?       
+  logs       Json?         
+  metadata   Json?         
 }
 
 model WorkflowRunStep {
@@ -290,14 +63,39 @@ model WorkflowRunStep {
   status     RunStepStatus @default(PENDING)
   startedAt  DateTime      @default(now())
   finishedAt DateTime?
-  result     Json?         // Step result
-  error      String?       // Error message if failed
-  logs       Json?         // Array of RunLog JSON
-  metadata   Json?         // Additional metadata
-  run        WorkflowRun   @relation(fields: [runId], references: [id], onDelete: Cascade)
+  result     Json?         
+  error      String?       
+  logs       Json?         
+  metadata   Json?         
 }
 
-// New Enums
+model WorkflowSchedule {
+  id         String   @id @default(cuid())
+  workflowId String
+  name       String
+  cron       String   
+  timezone   String   @default("UTC")
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+model WorkflowTask {
+  id            String     @id @default(cuid())
+  workflowId    String     
+  name          String
+  description   String?
+  variableValues Json?     
+  assignee      String?    
+  status        WorkflowTaskStatus @default(PENDING)
+  schedule      Json?      
+  logs          Json?      
+  createdAt     DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  startedAt     DateTime?
+  completedAt   DateTime?
+}
+
 enum WorkflowStatus {
   DRAFT
   ACTIVE
@@ -314,4 +112,12 @@ enum RunStepStatus {
   FAILED
   SKIPPED
   RETRYING
+}
+
+enum WorkflowTaskStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+  CANCELLED
 }

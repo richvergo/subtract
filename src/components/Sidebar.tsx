@@ -2,28 +2,14 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { signOut, useSession } from "next-auth/react"
 
 export function Sidebar() {
   const pathname = usePathname()
-  const { data: session } = useSession()
-
-  const handleLogout = async () => {
-    await signOut({ callbackUrl: '/login' })
-  }
 
   const navigation = [
     {
-      name: 'Tasks',
-      href: '/tasks',
-    },
-    {
       name: 'Workflows',
-      href: '/agents',
-    },
-    {
-      name: 'Logins',
-      href: '/logins',
+      href: '/workflows',
     },
   ]
 
@@ -42,7 +28,7 @@ export function Sidebar() {
       <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
         {/* Logo Section */}
         <div style={{ padding: "24px", borderBottom: "1px solid #444" }}>
-          <Link href="/tasks" style={{ 
+          <Link href="/workflows" style={{ 
             display: "flex", 
             alignItems: "center", 
             gap: "12px",
@@ -116,49 +102,6 @@ export function Sidebar() {
           })}
         </nav>
 
-        {/* User Info Section */}
-        {session && (
-          <div style={{ padding: "16px", borderTop: "1px solid #444" }}>
-            <div style={{ marginBottom: "12px", padding: "0 12px" }}>
-              <p style={{ fontSize: "14px", fontWeight: "500", margin: "0 0 4px 0" }}>
-                {session.user?.name || 'User'}
-              </p>
-              <p style={{ fontSize: "12px", color: "#999", margin: 0 }}>
-                {session.user?.email}
-              </p>
-            </div>
-
-            {/* Logout */}
-            <button
-              onClick={handleLogout}
-              style={{
-                width: "100%",
-                display: "flex",
-                alignItems: "center",
-                gap: "8px",
-                padding: "12px",
-                background: "transparent",
-                border: "none",
-                color: "#ccc",
-                fontSize: "14px",
-                cursor: "pointer",
-                borderRadius: "6px",
-                transition: "all 0.2s ease"
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.backgroundColor = "#444"
-                e.currentTarget.style.color = "white"
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.backgroundColor = "transparent"
-                e.currentTarget.style.color = "#ccc"
-              }}
-            >
-              <span>🚪</span>
-              <span>Logout</span>
-            </button>
-          </div>
-        )}
       </div>
     </aside>
   )

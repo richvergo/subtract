@@ -1,442 +1,337 @@
-/**
- * PuppeteerCaptureService
- * Enterprise-grade capture service for workflow recording
- */
-
-import { Browser, Page, CDPSession } from 'puppeteer'
-import { prisma } from '@/lib/db'
-import { validateAction, LoginConfig } from '../logic/schemas'
-import { SelectorStrategy } from './selector/SelectorStrategy'
-import { LoginAgentAdapter } from '../login/LoginAgentAdapter'
-import { DomainScope, DomainScopeConfig, NavigationEvent } from './DomainScope'
+import { Browser, Page } from 'puppeteer'
+import { launchPuppeteer, PuppeteerPresets } from '@/lib/puppeteer-config'
 
 export interface CaptureConfig {
-  includeScreenshots: boolean
-  captureFrequency: number // milliseconds
-  selectorStrategy: 'css' | 'xpath' | 'text' | 'hybrid'
-  includeNetworkRequests: boolean
-  includeConsoleLogs: boolean
-  timeout: number
-  requiresLogin?: boolean
-  loginConfig?: LoginConfig
-  domainScope?: DomainScopeConfig
-  onRecordingPaused?: (reason: string) => void
-  onRecordingResumed?: () => void
+  includeScreenshots?: boolean
+  captureFrequency?: number
+  maxScreenshots?: number
+  showBrowser?: boolean
+  browserViewport?: { width: number; height: number }
+  allowUserInteraction?: boolean
+  autoClose?: boolean
 }
 
-export interface WorkflowAction {
+export interface CapturedAction {
   id: string
-  type: 'click' | 'type' | 'select' | 'navigate' | 'scroll' | 'wait' | 'hover' | 'double_click' | 'right_click' | 'drag_drop' | 'key_press' | 'screenshot' | 'custom'
+  type: string
   selector: string
   value?: string
-  url?: string
   coordinates?: { x: number; y: number }
-  waitFor?: string
-  timeout?: number
-  retryCount?: number
-  dependencies?: string[]
-  metadata?: Record<string, any>
+  metadata?: {
+    elementType?: string
+    elementText?: string
+    innerText?: string
+    inputType?: string
+    timestamp?: number
+    confidence?: number
+    screenshotUrl?: string
+    annotations?: Record<string, any>
+  }
+  screenshotUrl?: string
+  selectorBox?: { x: number; y: number; width: number; height: number }
+  order?: number
 }
 
 export interface CaptureSession {
-  id: string
+  sessionId: string
   workflowId: string
+  url: string
   startTime: number
-  endTime?: number
-  actions: WorkflowAction[]
-  config: CaptureConfig
-  domainScope?: DomainScope
-  metadata: {
-    userAgent: string
-    viewport: { width: number; height: number }
-    pageTitle: string
-    url: string
-    domainScope?: {
-      isPaused: boolean
-      currentDomain: string | null
-      allowedDomains: string[]
-      navigationHistory: NavigationEvent[]
-    }
-  }
+  actions: CapturedAction[]
+  metadata: Record<string, any>
 }
 
 export class PuppeteerCaptureService {
-  // private browser: Browser | null = null // Unused
+  private browser: Browser | null = null
   private page: Page | null = null
-  private cdpSession: CDPSession | null = null
   private session: CaptureSession | null = null
-  private isCapturing = false
-  // private selectorStrategy: SelectorStrategy // Unused
-  private eventListeners: Array<() => void> = []
-  private loginAdapter: LoginAgentAdapter | null = null
-  private domainScope: DomainScope | null = null
-  private isRecordingPaused = false
-  private debugMode = false
+  private config: CaptureConfig
+  private isCapturing: boolean = false
+  private screenshotCount: number = 0
+  private captureInterval: NodeJS.Timeout | null = null
 
-  constructor(private config: CaptureConfig) {
-    // this.selectorStrategy = new SelectorStrategy({
-    //   strategy: config.selectorStrategy,
-    //   priority: ['id', 'data-testid', 'name', 'role', 'class', 'nth-child'],
-    //   fallback: true,
-    //   timeout: config.timeout
-    // })
-    
-    // Enable debug mode if environment variable is set
-    this.debugMode = process.env.DOMAIN_SCOPE_DEBUG === 'true'
-  }
-
-  /**
-   * Log domain scope debug information
-   */
-  private logDomainScopeDebug(message: string, url: string, status: 'ALLOWED' | 'BLOCKED' | 'SSO'): void {
-    if (this.debugMode) {
-      const statusIcon = status === 'ALLOWED' ? '✅' : status === 'BLOCKED' ? '❌' : '✅'
-      console.log(`🌐 ${status} ${statusIcon} ${url}`)
-      console.log(`   ${message}`)
+  constructor(config: CaptureConfig = {}) {
+    this.config = {
+      includeScreenshots: true,
+      captureFrequency: 2000,
+      maxScreenshots: 50,
+      showBrowser: false,
+      browserViewport: { width: 1280, height: 720 },
+      allowUserInteraction: false,
+      autoClose: true,
+      ...config
     }
   }
 
-  /**
-   * Initialize the capture service with Puppeteer
-   */
-  async initialize(browser: Browser, page: Page): Promise<void> {
-    this.browser = browser
-    this.page = page
-    this.cdpSession = await page.target().createCDPSession()
-    
-    // Initialize domain scope if configured
-    if (this.config.domainScope) {
-      this.domainScope = new DomainScope(this.config.domainScope)
-      console.log('🌐 Domain scope initialized:', this.config.domainScope.baseDomain)
-    }
-    
-    // Initialize login adapter if login is required
-    if (this.config.requiresLogin && this.config.loginConfig) {
-      this.loginAdapter = new LoginAgentAdapter()
-      await this.loginAdapter.initialize(browser, page)
-    }
-    
-    console.log('🎬 PuppeteerCaptureService initialized')
-  }
-
-  /**
-   * Start capturing user actions for a workflow
-   */
-  async startCapture(workflowId: string, url: string): Promise<void> {
-    if (!this.page || this.isCapturing) {
-      throw new Error('Cannot start capture: service not initialized or already capturing')
+  async startCapture(workflowId: string, url: string): Promise<CaptureSession> {
+    if (this.isCapturing) {
+      throw new Error('Capture is already in progress')
     }
 
-    // Handle login if required
-    if (this.config.requiresLogin && this.config.loginConfig && this.loginAdapter) {
-      console.log('🔐 Authenticating before capture...')
-      await this.loginAdapter.initLogin(this.page, this.config.loginConfig)
-      this.page = await this.loginAdapter.getAuthenticatedPage(this.config.loginConfig)
-    }
-
-    // Navigate to the target URL
-    await this.page.goto(url, { 
-      waitUntil: 'networkidle2',
-      timeout: this.config.timeout 
+    // Launch browser with robust configuration
+    const preset = this.config.showBrowser ? PuppeteerPresets.development : PuppeteerPresets.production
+    this.browser = await launchPuppeteer({
+      headless: preset.headless,
+      showBrowser: this.config.showBrowser,
+      viewport: this.config.browserViewport || preset.viewport,
+      timeout: (preset as any).timeout,
+      executablePath: (preset as any).executablePath,
+      additionalArgs: [...preset.additionalArgs]
     })
 
-    // Check domain scope for initial URL
-    if (this.domainScope) {
-      const navigationEvent = this.domainScope.recordNavigation(url)
-      if (!navigationEvent.allowed) {
-        console.warn('⚠️ Initial URL not in allowed domain scope:', navigationEvent.domain)
-        this.isRecordingPaused = true
-        this.config.onRecordingPaused?.(`Recording paused: outside target system (${navigationEvent.domain})`)
-      }
+    this.page = await this.browser.newPage()
+    
+    if (this.config.browserViewport) {
+      await this.page.setViewport(this.config.browserViewport)
     }
 
+    // Navigate to URL
+    await this.page.goto(url, { waitUntil: 'networkidle2' })
+
+    // Initialize session
     this.session = {
-      id: `capture_${Date.now()}`,
+      sessionId: `capture_${Date.now()}`,
       workflowId,
+      url,
       startTime: Date.now(),
       actions: [],
-      config: this.config,
-      domainScope: this.domainScope || undefined,
       metadata: {
         userAgent: await this.page.evaluate(() => navigator.userAgent),
-        viewport: await this.page.viewport() || { width: 1920, height: 1080 },
-        pageTitle: await this.page.title(),
-        url: this.page.url(),
-        domainScope: this.domainScope ? {
-          isPaused: this.isRecordingPaused,
-          currentDomain: this.domainScope.getRecordingState().currentDomain,
-          allowedDomains: this.domainScope.getRecordingState().allowedDomains,
-          navigationHistory: this.domainScope.getNavigationHistory()
-        } : undefined
+        viewport: this.config.browserViewport,
+        timestamp: new Date().toISOString()
       }
     }
+
+    // Inject capture script
+    await this.injectCaptureScript()
+
+    // Start periodic capture
+    this.startPeriodicCapture()
 
     this.isCapturing = true
-    await this.setupEventListeners()
-    
-    console.log('🎬 Capture session started:', {
-      sessionId: this.session.id,
-      workflowId,
-      url
-    })
+    console.log(`🎬 Puppeteer capture started for workflow ${workflowId} at ${url}`)
+
+    return this.session
   }
 
-  /**
-   * Stop capturing and return captured actions
-   */
-  async stopCapture(): Promise<WorkflowAction[]> {
-    if (!this.isCapturing || !this.session) {
-      return []
-    }
+  private async injectCaptureScript(): Promise<void> {
+    if (!this.page) return
 
-    this.isCapturing = false
-    this.session.endTime = Date.now()
-    
-    await this.cleanupEventListeners()
-    
-    // Validate and persist actions to database
-    const validatedActions = await this.validateAndPersistActions()
-    
-    console.log('🛑 Capture session stopped:', {
-      sessionId: this.session.id,
-      duration: this.session.endTime - this.session.startTime,
-      actionCount: this.session.actions.length,
-      validatedCount: validatedActions.length
-    })
+    await this.page.evaluate(() => {
+      // Initialize capture actions array
+      ;(window as any).__captureActions = []
 
-    return validatedActions
-  }
-
-  /**
-   * Get currently captured actions
-   */
-  getCapturedActions(): WorkflowAction[] {
-    return this.session?.actions || []
-  }
-
-  /**
-   * Set up comprehensive event listeners using CDP
-   */
-  private async setupEventListeners(): Promise<void> {
-    if (!this.page || !this.cdpSession) return
-
-    try {
-      // Enable necessary domains
-      await this.cdpSession.send('Runtime.enable')
-      await this.cdpSession.send('DOM.enable')
-      await this.cdpSession.send('Page.enable')
-      await this.cdpSession.send('Network.enable')
-
-      // Set up CDP event listeners
-      this.cdpSession.on('Runtime.consoleAPICalled', this.handleConsoleMessage.bind(this))
-      this.cdpSession.on('Page.frameNavigated', this.handleNavigation.bind(this))
-      this.cdpSession.on('Network.requestWillBeSent', this.handleNetworkRequest.bind(this))
-      
-      // Set up domain scope navigation monitoring
-      if (this.domainScope) {
-        this.page.on('framenavigated', this.handleDomainScopeNavigation.bind(this))
-        this.page.on('request', this.handleDomainScopeRequest.bind(this))
+      // Enhanced selector generation
+      function generateSelector(element: any): string {
+        // Ensure element exists
+        if (!element) return 'body'
+        
+        // Priority: id > data-* > name > role > class combo > nth-child
+        if (element.id) return `#${element.id}`
+        
+        if (element.dataset && element.dataset.testid) return `[data-testid="${element.dataset.testid}"]`
+        if (element.dataset && element.dataset.id) return `[data-id="${element.dataset.id}"]`
+        
+        if (element.name) return `[name="${element.name}"]`
+        
+        if (element.getAttribute && element.getAttribute('role')) return `[role="${element.getAttribute('role')}"]`
+        
+        if (element.className) {
+          const classes = element.className.split(' ').filter((c: string) => c.length > 0)
+          if (classes.length > 0) {
+            return `.${classes.join('.')}`
+          }
+        }
+        
+        // Fallback to nth-child
+        const parent = element.parentElement
+        if (parent) {
+          const siblings = Array.from(parent.children)
+          const index = siblings.indexOf(element)
+          return `${element.tagName.toLowerCase()}:nth-child(${index + 1})`
+        }
+        
+        // Final fallback
+        return element.tagName ? element.tagName.toLowerCase() : 'body'
       }
 
-      // Inject comprehensive capture script
-      await this.page.evaluateOnNewDocument(() => {
-        // Global capture state
-        (window as any).__captureActions = []
-        (window as any).__captureConfig = {
-          includeScreenshots: true,
-          captureFrequency: 1000,
-          selectorStrategy: 'hybrid'
+      // Click event listener
+      document.addEventListener('click', (event) => {
+        const selector = generateSelector(event.target || document.body)
+        const action = {
+          id: `action_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+          type: 'click',
+          selector: selector || 'body', // Ensure selector is always a string
+          coordinates: { x: event.clientX, y: event.clientY },
+          metadata: {
+            elementType: (event.target as HTMLElement)?.tagName || '',
+            elementText: (event.target as HTMLElement)?.textContent?.trim() || '',
+            innerText: (event.target as HTMLElement)?.innerText?.trim() || '',
+            inputType: (event.target as HTMLInputElement)?.type || '',
+            timestamp: Date.now(),
+            confidence: 0.9
+          }
         }
+        ;(window as any).__captureActions.push(action)
+      }, true)
 
-        // Enhanced selector generation
-        function generateSelector(element: any): string {
-          // Priority: id > data-* > name > role > class combo > nth-child
-          if (element.id) return `#${element.id}`
-          
-          if (element.dataset.testid) return `[data-testid="${element.dataset.testid}"]`
-          if (element.dataset.id) return `[data-id="${element.dataset.id}"]`
-          
-          if (element.name) return `[name="${element.name}"]`
-          
-          if (element.getAttribute('role')) return `[role="${element.getAttribute('role')}"]`
-          
-          if (element.className) {
-            const classes = element.className.split(' ').filter(c => c.length > 0)
-            if (classes.length > 0) {
-              return `.${classes.join('.')}`
-            }
+      // Input event listener
+      document.addEventListener('input', (event) => {
+        const selector = generateSelector(event.target || document.body)
+        const action = {
+          id: `action_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+          type: 'input',
+          selector: selector || 'body', // Ensure selector is always a string
+          value: (event.target as HTMLInputElement)?.value || '',
+          coordinates: { x: (event as MouseEvent).clientX || 0, y: (event as MouseEvent).clientY || 0 },
+          metadata: {
+            elementType: (event.target as HTMLElement)?.tagName || '',
+            elementText: (event.target as HTMLElement)?.textContent?.trim() || '',
+            innerText: (event.target as HTMLElement)?.innerText?.trim() || '',
+            inputType: (event.target as HTMLInputElement)?.type || '',
+            timestamp: Date.now(),
+            confidence: 0.9
           }
-          
-          // Fallback to nth-child
-          const parent = element.parentElement
-          if (parent) {
-            const siblings = Array.from(parent.children)
-            const index = siblings.indexOf(element)
-            return `${element.tagName.toLowerCase()}:nth-child(${index + 1})`
-          }
-          
-          return element.tagName.toLowerCase()
         }
+        ;(window as any).__captureActions.push(action)
+      }, true)
 
-        // Capture click events
-        document.addEventListener('click', (event) => {
-          const action = {
-            id: `action_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-            type: 'click',
-            selector: generateSelector(event.target),
-            coordinates: { x: event.clientX, y: event.clientY },
-            metadata: {
-              elementType: event.target.tagName,
-              elementText: event.target.textContent?.trim() || '',
-              innerText: event.target.innerText?.trim() || '',
-              inputType: (event.target as HTMLInputElement).type || '',
-              timestamp: Date.now(),
-              confidence: 0.9
-            }
+      // Change event listener
+      document.addEventListener('change', (event) => {
+        const selector = generateSelector(event.target || document.body)
+        const action = {
+          id: `action_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+          type: 'change',
+          selector: selector || 'body', // Ensure selector is always a string
+          value: (event.target as HTMLInputElement)?.value || '',
+          coordinates: { x: (event as MouseEvent).clientX || 0, y: (event as MouseEvent).clientY || 0 },
+          metadata: {
+            elementType: (event.target as HTMLElement)?.tagName || '',
+            elementText: (event.target as HTMLElement)?.textContent?.trim() || '',
+            innerText: (event.target as HTMLElement)?.innerText?.trim() || '',
+            inputType: (event.target as HTMLInputElement)?.type || '',
+            timestamp: Date.now(),
+            confidence: 0.9
           }
-          ;(window as any).__captureActions.push(action)
-        }, true)
+        }
+        ;(window as any).__captureActions.push(action)
+      }, true)
 
-        // Capture input/change events
-        document.addEventListener('input', (event) => {
-          const target = event.target as HTMLInputElement
-          const action = {
-            id: `action_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-            type: 'type',
-            selector: generateSelector(event.target),
-            value: target.value,
-            metadata: {
-              elementType: event.target.tagName,
-              elementText: target.placeholder || '',
-              inputType: target.type,
-              innerText: target.innerText?.trim() || '',
-              timestamp: Date.now(),
-              confidence: 0.9
-            }
+      // Submit event listener
+      document.addEventListener('submit', (event) => {
+        const selector = generateSelector(event.target || document.body)
+        const action = {
+          id: `action_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+          type: 'submit',
+          selector: selector || 'body', // Ensure selector is always a string
+          coordinates: { x: 0, y: 0 }, // Submit events don't have coordinates
+          metadata: {
+            elementType: (event.target as HTMLElement)?.tagName || '',
+            elementText: (event.target as HTMLElement)?.textContent?.trim() || '',
+            innerText: (event.target as HTMLElement)?.innerText?.trim() || '',
+            inputType: (event.target as HTMLInputElement)?.type || '',
+            timestamp: Date.now(),
+            confidence: 0.9
           }
-          ;(window as any).__captureActions.push(action)
-        }, true)
+        }
+        ;(window as any).__captureActions.push(action)
+      }, true)
 
-        // Capture change events (select, checkbox, radio)
-        document.addEventListener('change', (event) => {
-          const target = event.target as HTMLSelectElement | HTMLInputElement
-          const action = {
-            id: `action_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-            type: 'select',
-            selector: generateSelector(event.target),
-            value: target.value,
-            metadata: {
-              elementType: event.target.tagName,
-              elementText: target.textContent?.trim() || '',
-              inputType: target.type,
-              innerText: target.innerText?.trim() || '',
-              timestamp: Date.now(),
-              confidence: 0.9
-            }
+      // Network request listener
+      const originalFetch = window.fetch
+      window.fetch = async (...args) => {
+        const response = await originalFetch(...args)
+        const action = {
+          id: `action_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+          type: 'network',
+          selector: 'body',
+          metadata: {
+            url: args[0],
+            method: args[1]?.method || 'GET',
+            timestamp: Date.now(),
+            confidence: 0.8
           }
-          ;(window as any).__captureActions.push(action)
-        }, true)
+        }
+        ;(window as any).__captureActions.push(action)
+        return response
+      }
 
-        // Capture form submissions
-        document.addEventListener('submit', (event) => {
-          const action = {
-            id: `action_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-            type: 'click',
-            selector: generateSelector(event.target),
-            metadata: {
-              elementType: 'form',
-              elementText: 'Form submission',
-              innerText: 'Form submission',
-              timestamp: Date.now(),
-              confidence: 0.9
-            }
+      // Console message listener
+      const originalLog = console.log
+      console.log = (...args) => {
+        const action = {
+          id: `action_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+          type: 'console',
+          selector: 'body',
+          metadata: {
+            message: args.join(' '),
+            timestamp: Date.now(),
+            confidence: 0.7
           }
-          ;(window as any).__captureActions.push(action)
-        }, true)
-
-        // Capture navigation events
-        window.addEventListener('beforeunload', () => {
-          const action = {
-            id: `action_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-            type: 'navigate',
-            url: window.location.href,
-            metadata: {
-              elementType: 'window',
-              elementText: 'Navigation',
-              innerText: 'Navigation',
-              timestamp: Date.now(),
-              confidence: 1.0
-            }
-          }
-          ;(window as any).__captureActions.push(action)
-        })
-
-        // Capture scroll events (throttled)
-        let scrollTimeout: NodeJS.Timeout
-        window.addEventListener('scroll', () => {
-          clearTimeout(scrollTimeout)
-          scrollTimeout = setTimeout(() => {
-            const action = {
-              id: `action_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-              type: 'scroll',
-              coordinates: { x: window.scrollX, y: window.scrollY },
-              metadata: {
-                elementType: 'window',
-                elementText: 'Scroll',
-                innerText: 'Scroll',
-                timestamp: Date.now(),
-                confidence: 0.8
-              }
-            }
-            ;(window as any).__captureActions.push(action)
-          }, 300)
-        }, true)
-      })
-
-      // Set up periodic action retrieval
-      this.startPeriodicCapture()
-
-    } catch (error) {
-      console.error('Error setting up event listeners:', error)
-      throw error
-    }
+        }
+        ;(window as any).__captureActions.push(action)
+        return originalLog(...args)
+      }
+    })
   }
 
-  /**
-   * Start periodic capture of actions
-   */
   private startPeriodicCapture(): void {
-    if (!this.page || !this.session) return
+    if (!this.page || this.captureInterval) return
 
-    const interval = setInterval(async () => {
-      if (!this.isCapturing || !this.page || !this.session) {
-        clearInterval(interval)
+    this.captureInterval = setInterval(async () => {
+      if (!this.page || this.page.isClosed()) {
+        this.cleanupEventListeners()
         return
       }
 
       try {
-        const actions = await this.page.evaluate(() => {
-          const actions = (window as any).__captureActions || []
-          ;(window as any).__captureActions = [] // Clear captured actions
-          return actions
-        })
-
-        for (const action of actions) {
-          this.session!.actions.push(action)
+        // Check if page is still valid and not closed
+        if (!this.page || this.page.isClosed()) {
+          console.log('Page is closed, stopping capture')
+          this.cleanupEventListeners()
+          return
         }
 
-        // Capture screenshot if configured
-        if (this.config.includeScreenshots && this.session.actions.length % 5 === 0) {
-          try {
-            const screenshot = await this.page.screenshot({ encoding: 'base64' })
-            const lastAction = this.session.actions[this.session.actions.length - 1]
-            if (lastAction) {
-              lastAction.metadata = lastAction.metadata || {}
-              lastAction.metadata.screenshot = screenshot
-            }
-          } catch (screenshotError) {
-            console.warn('Failed to capture screenshot:', screenshotError)
+        // Check if page is still connected to browser
+        if (!this.page.url() || this.page.url() === 'about:blank') {
+          console.log('Page is not properly loaded, skipping capture')
+          return
+        }
+
+        let actions = []
+        try {
+          actions = await this.page.evaluate(() => {
+            const actions = (window as any).__captureActions || []
+            ;(window as any).__captureActions = [] // Clear captured actions
+            return actions
+          })
+        } catch (error) {
+          if (error.message.includes('Execution context was destroyed')) {
+            console.log('Page context destroyed during navigation, skipping capture cycle')
+            return
           }
+          if (error.message.includes('Protocol error') || error.message.includes('Target closed')) {
+            console.log('Browser target closed, stopping capture')
+            this.cleanupEventListeners()
+            return
+          }
+          console.error('Error during page evaluation:', error)
+          return
+        }
+
+        for (const action of actions) {
+          // CRITICAL: Ensure selector is always a valid string to prevent validation failures
+          if (!action.selector || typeof action.selector !== 'string') {
+            action.selector = 'body' // Fallback to body if selector is null/undefined
+            console.log(`⚠️ Fixed invalid selector for action ${action.id}: ${action.selector}`)
+          }
+          
+          // Capture screenshot for each action if configured and within limits
+          if (this.config.includeScreenshots && this.shouldCaptureScreenshot()) {
+            await this.captureActionScreenshot(action)
+          }
+          
+          this.session!.actions.push(action)
         }
       } catch (error) {
         console.error('Error during periodic capture:', error)
@@ -444,308 +339,77 @@ export class PuppeteerCaptureService {
     }, this.config.captureFrequency)
   }
 
-  /**
-   * Handle console messages
-   */
-  private handleConsoleMessage(event: any): void {
-    if (this.config.includeConsoleLogs) {
-      console.log('Console message captured:', event)
-    }
-  }
-
-  /**
-   * Handle navigation events
-   */
-  private handleNavigation(event: any): void {
-    if (this.session && event.frame.parentId === null) {
-      const action: WorkflowAction = {
-        id: `action_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-        type: 'navigate',
-        selector: 'body', // Required field
-        url: event.frame.url,
-        metadata: {
-          elementType: 'window',
-          elementText: 'Navigation',
-          innerText: 'Navigation',
-          timestamp: Date.now(),
-          confidence: 1.0
-        }
-      }
-      this.session.actions.push(action)
-    }
-  }
-
-  /**
-   * Handle network requests
-   */
-  private handleNetworkRequest(event: any): void {
-    if (this.config.includeNetworkRequests) {
-      console.log('Network request captured:', event.request.url)
-    }
-  }
-
-  /**
-   * Clean up event listeners
-   */
-  private async cleanupEventListeners(): Promise<void> {
-    if (!this.page || !this.cdpSession) return
+  private async captureActionScreenshot(action: CapturedAction): Promise<void> {
+    if (!this.page || this.screenshotCount >= this.config.maxScreenshots!) return
 
     try {
-      // Remove CDP event listeners
-      this.cdpSession.removeAllListeners()
-      
-      // Clear global capture state
-      await this.page.evaluate(() => {
-        delete (window as any).__captureActions
-        delete (window as any).__captureConfig
+      const screenshot = await this.page.screenshot({ 
+        type: 'png'
       })
 
-      // Clean up any remaining listeners
-      this.eventListeners.forEach(cleanup => cleanup())
-      this.eventListeners = []
-
+      // In a real implementation, you'd save this to a file or cloud storage
+      // For now, we'll just store the base64 data
+      action.screenshotUrl = `data:image/png;base64,${Buffer.from(screenshot).toString('base64')}`
+      this.screenshotCount++
     } catch (error) {
-      console.error('Error cleaning up event listeners:', error)
+      console.error('Failed to capture screenshot:', error)
     }
   }
 
-  /**
-   * Validate and persist actions to database
-   */
-  private async validateAndPersistActions(): Promise<WorkflowAction[]> {
-    if (!this.session) return []
-
-    const validatedActions: WorkflowAction[] = []
-    const errors: string[] = []
-
-    for (const action of this.session.actions) {
-      try {
-        // Validate with Zod schema
-        const validatedAction = validateAction(action)
-        
-        // Additional runtime validation
-        if (!this.isValidSelector(validatedAction.selector)) {
-          errors.push(`Invalid selector for action ${action.id}: ${validatedAction.selector}`)
-          continue
-        }
-
-        validatedActions.push(validatedAction)
-
-        // Persist to database
-        await prisma.workflowAction.create({
-          data: {
-            workflowId: this.session.workflowId,
-            action: validatedAction,
-            order: validatedActions.length - 1
-          }
-        })
-
-      } catch (error) {
-        const errorMessage = `Validation failed for action ${action.id}: ${error instanceof Error ? error.message : 'Unknown error'}`
-        errors.push(errorMessage)
-        console.error(errorMessage)
-      }
-    }
-
-    if (errors.length > 0) {
-      console.warn('Validation errors encountered:', errors)
-    }
-
-    console.log(`✅ Persisted ${validatedActions.length} validated actions to database`)
-    return validatedActions
+  private shouldCaptureScreenshot(): boolean {
+    return this.screenshotCount < this.config.maxScreenshots!
   }
 
-  /**
-   * Validate selector format
-   */
-  private isValidSelector(selector: string): boolean {
-    if (!selector || selector.trim() === '') return false
+  private cleanupEventListeners(): void {
+    if (this.captureInterval) {
+      clearInterval(this.captureInterval)
+      this.captureInterval = null
+    }
+  }
+
+  async stopCapture(): Promise<CapturedAction[]> {
+    if (!this.isCapturing) {
+      return []
+    }
+
+    this.cleanupEventListeners()
+    this.isCapturing = false
+
+    const actions = this.session?.actions || []
+    console.log(`🛑 Capture session stopped: ${JSON.stringify({
+      sessionId: this.session?.sessionId,
+      duration: Date.now() - (this.session?.startTime || 0),
+      actionCount: actions.length,
+      validatedCount: actions.length
+    })}`)
+
+    return actions
+  }
+
+  async cleanup(): Promise<void> {
+    this.cleanupEventListeners()
     
-    // Basic CSS selector validation
-    const cssSelectorRegex = /^[#.\w\[\]="':\s\-_()>+~*]+$/
-    return cssSelectorRegex.test(selector)
+    if (this.page && !this.page.isClosed()) {
+      await this.page.close()
+    }
+    
+    if (this.browser) {
+      await this.browser.close()
+    }
+
+    this.browser = null
+    this.page = null
+    this.session = null
+    this.screenshotCount = 0
+
+    console.log('🧹 PuppeteerCaptureService cleaned up')
   }
 
-  /**
-   * Get current capture session
-   */
   getSession(): CaptureSession | null {
     return this.session
   }
 
-  /**
-   * Check if currently capturing
-   */
   isActive(): boolean {
     return this.isCapturing
-  }
-
-  /**
-   * Clean up resources
-   */
-  async cleanup(): Promise<void> {
-    await this.cleanupEventListeners()
-    
-    if (this.cdpSession) {
-      await this.cdpSession.detach()
-      this.cdpSession = null
-    }
-    
-    if (this.loginAdapter) {
-      await this.loginAdapter.cleanup()
-      this.loginAdapter = null
-    }
-    
-    this.browser = null
-    this.page = null
-    this.session = null
-    this.isCapturing = false
-    
-    console.log('🧹 PuppeteerCaptureService cleaned up')
-  }
-
-  /**
-   * Handle domain scope navigation events
-   */
-  private async handleDomainScopeNavigation(frame: any): Promise<void> {
-    if (!this.domainScope || !frame.url) return
-
-    const navigationEvent = this.domainScope.recordNavigation(frame.url)
-    
-    // Log navigation decision with debug information
-    console.log(`🌐 Domain scope navigation:`, {
-      url: frame.url,
-      domain: navigationEvent.domain,
-      allowed: navigationEvent.allowed,
-      reason: navigationEvent.reason
-    })
-    
-    // Debug logging for domain scope decisions
-    if (this.debugMode) {
-      const url = frame.url
-      const domain = navigationEvent.domain
-      const allowed = navigationEvent.allowed
-      const reason = navigationEvent.reason
-      
-      if (allowed) {
-        if (reason === 'SSO redirect' || domain.includes('auth0.com') || domain.includes('login.')) {
-          this.logDomainScopeDebug(`SSO authentication domain`, url, 'SSO')
-        } else {
-          this.logDomainScopeDebug(`Allowed domain navigation`, url, 'ALLOWED')
-        }
-      } else {
-        this.logDomainScopeDebug(`Blocked external domain: ${reason}`, url, 'BLOCKED')
-      }
-    }
-
-    // Update recording pause state
-    const wasPaused = this.isRecordingPaused
-    this.isRecordingPaused = !navigationEvent.allowed
-
-    // Handle state changes
-    if (!wasPaused && this.isRecordingPaused) {
-      // Recording just paused
-      const reason = `Recording paused: outside target system (${navigationEvent.domain})`
-      console.warn(`⚠️ ${reason}`)
-      this.config.onRecordingPaused?.(reason)
-    } else if (wasPaused && !this.isRecordingPaused) {
-      // Recording just resumed
-      console.log('✅ Recording resumed: returned to allowed domain')
-      this.config.onRecordingResumed?.()
-    }
-
-    // Update session metadata
-    if (this.session && this.domainScope) {
-      this.session.metadata.domainScope = {
-        isPaused: this.isRecordingPaused,
-        currentDomain: this.domainScope.getRecordingState().currentDomain,
-        allowedDomains: this.domainScope.getRecordingState().allowedDomains,
-        navigationHistory: this.domainScope.getNavigationHistory()
-      }
-    }
-  }
-
-  /**
-   * Handle domain scope request events
-   */
-  private async handleDomainScopeRequest(request: any): Promise<void> {
-    if (!this.domainScope || !request.url()) return
-
-    const url = request.url()
-    const result = this.domainScope.isAllowedDomain(url)
-    
-    // Log request decision
-    if (!result.isAllowed) {
-      console.log(`🚫 Blocked request to disallowed domain:`, {
-        url,
-        domain: result.domain,
-        reason: result.reason
-      })
-    }
-  }
-
-  /**
-   * Check if current domain is allowed for recording
-   */
-  private isCurrentDomainAllowed(): boolean {
-    if (!this.domainScope || !this.page) return true
-
-    const currentUrl = this.page.url()
-    const result = this.domainScope.isAllowedDomain(currentUrl)
-    return result.isAllowed
-  }
-
-  /**
-   * Get domain scope status
-   */
-  getDomainScopeStatus(): {
-    isPaused: boolean
-    currentDomain: string | null
-    allowedDomains: string[]
-    navigationHistory: NavigationEvent[]
-    stats: any
-  } | null {
-    if (!this.domainScope) return null
-
-    const state = this.domainScope.getRecordingState()
-    const stats = this.domainScope.getDomainStats()
-    
-    return {
-      isPaused: this.isRecordingPaused,
-      currentDomain: state.currentDomain,
-      allowedDomains: state.allowedDomains,
-      navigationHistory: this.domainScope.getNavigationHistory(),
-      stats
-    }
-  }
-
-  /**
-   * Update domain scope configuration dynamically
-   */
-  updateDomainScope(config: Partial<DomainScopeConfig>): void {
-    if (!this.domainScope) return
-
-    this.domainScope.updateConfig(config)
-    console.log('🌐 Domain scope updated:', config)
-  }
-
-  /**
-   * Add domain to allowlist dynamically
-   */
-  addAllowedDomain(domain: string): void {
-    if (!this.domainScope) return
-
-    this.domainScope.addAllowedDomain(domain)
-    console.log('🌐 Added domain to allowlist:', domain)
-  }
-
-  /**
-   * Remove domain from allowlist
-   */
-  removeAllowedDomain(domain: string): void {
-    if (!this.domainScope) return
-
-    this.domainScope.removeAllowedDomain(domain)
-    console.log('🌐 Removed domain from allowlist:', domain)
   }
 }

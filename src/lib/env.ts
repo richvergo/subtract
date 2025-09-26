@@ -14,9 +14,6 @@ const envSchema = z.object({
   // Database connection (required for all database operations)
   DATABASE_URL: z.string().min(1, 'DATABASE_URL is required for database operations'),
   
-  // NextAuth configuration (required for authentication)
-  NEXTAUTH_SECRET: z.string().min(1, 'NEXTAUTH_SECRET is required for session security'),
-  
   // =============================================================================
   // OPTIONAL VARIABLES - Backend will work with defaults
   // =============================================================================
@@ -24,8 +21,6 @@ const envSchema = z.object({
   // Node environment
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   
-  // NextAuth URL (defaults to localhost:3000 in development)
-  NEXTAUTH_URL: z.string().url().optional(),
   
   // Redis configuration (optional - will use in-memory fallback)
   REDIS_URL: z.string().url().optional(),
@@ -39,6 +34,8 @@ const envSchema = z.object({
   // Puppeteer configuration (optional)
   PUPPETEER_SKIP_CHROMIUM_DOWNLOAD: z.string().optional(),
   PUPPETEER_EXECUTABLE_PATH: z.string().optional(),
+  PUPPETEER_ARGS: z.string().optional(),
+  PUPPETEER_CACHE_DIR: z.string().optional(),
   
   // Test configuration (optional)
   DISABLE_DB_AUDIT: z.string().optional(),
@@ -58,7 +55,20 @@ try {
   }
   console.error('\n🔧 Please check your .env.local file and ensure all required variables are set.');
   console.error('📖 See .env.example for the required format.');
-  process.exit(1);
+  
+  // In development mode, don't exit - just log the error and continue
+  if (process.env.NODE_ENV === 'development') {
+    console.error('⚠️  Continuing in development mode with missing environment variables...');
+    // Set minimal defaults for development
+    env = {
+      DATABASE_URL: process.env.DATABASE_URL || 'file:./prisma/dev.db',
+      NEXTAUTH_SECRET: process.env.NEXTAUTH_SECRET || 'dev-secret-key',
+      NODE_ENV: 'development' as const,
+      NEXTAUTH_URL: process.env.NEXTAUTH_URL || 'http://localhost:3000',
+    } as z.infer<typeof envSchema>;
+  } else {
+    process.exit(1);
+  }
 }
 
 // Export validated environment variables
